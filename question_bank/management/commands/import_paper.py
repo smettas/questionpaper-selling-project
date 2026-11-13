@@ -11,6 +11,21 @@ from question_bank.pdf_import import (
 )
 
 
+def reuse_named_entry(model, name, **scope):
+    cleaned = " ".join(name.split())
+    if not cleaned or len(cleaned) > 150:
+        raise CommandError("Chapter and subtopic names must contain 1 to 150 characters.")
+    entries = model.objects.filter(**scope).order_by("pk")
+    exact = entries.filter(name=cleaned).first()
+    if exact:
+        return exact
+    normalized = cleaned.casefold()
+    for entry in entries:
+        if " ".join(entry.name.split()).casefold() == normalized:
+            return entry
+    return model.objects.get_or_create(name=cleaned, **scope)[0]
+
+
 class Command(BaseCommand):
     help = "Import a numbered question PDF and matching answer PDF into one NEET subtopic."
 
@@ -67,10 +82,10 @@ class Command(BaseCommand):
         saved = []
         try:
             with transaction.atomic():
-                chapter, _ = Chapter.objects.get_or_create(
-                    subject=options["subject"], level=options["level"], name=options["chapter"].strip()
+                chapter = reuse_named_entry(
+                    Chapter, options["chapter"], subject=options["subject"], level=options["level"],
                 )
-                subtopic, _ = Subtopic.objects.get_or_create(chapter=chapter, name=options["subtopic"].strip())
+                subtopic = reuse_named_entry(Subtopic, options["subtopic"], chapter=chapter)
                 for answer, image, fingerprint, needs_review in prepared:
                     existing = Question.objects.filter(fingerprint=fingerprint).first()
                     if existing:

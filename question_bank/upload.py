@@ -9,7 +9,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.shortcuts import render
 
-from .models import Chapter, Question
+from .models import Chapter, Question, Subtopic
 from .pdf_import import MAX_BYTES
 
 
@@ -19,8 +19,8 @@ class ImportForm(forms.Form):
     count = forms.IntegerField(min_value=1, max_value=300)
     subject = forms.ChoiceField(choices=Chapter.Subject.choices)
     level = forms.TypedChoiceField(choices=[(11, "Class 11"), (12, "Class 12")], coerce=int)
-    chapter = forms.CharField(max_length=150)
-    subtopic = forms.CharField(max_length=150)
+    chapter = forms.CharField(max_length=150, widget=forms.TextInput(attrs={"list": "chapter-suggestions", "autocomplete": "off"}))
+    subtopic = forms.CharField(max_length=150, widget=forms.TextInput(attrs={"list": "subtopic-suggestions", "autocomplete": "off"}))
     difficulty = forms.ChoiceField(choices=Question.Difficulty.choices)
     publish = forms.BooleanField(required=False, label="Activate questions that pass the option check")
 
@@ -55,4 +55,8 @@ def import_questions(request):
     return render(request, "admin/question_bank/import.html", {
         **admin.site.each_context(request), "title": "Import question PDFs",
         "form": form, "output": output.getvalue(),
+        "catalog": {
+            "chapters": list(Chapter.objects.values("id", "subject", "level", "name")),
+            "subtopics": list(Subtopic.objects.values("chapter_id", "name")),
+        },
     })

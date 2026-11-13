@@ -1,9 +1,15 @@
 {% extends "admin/base_site.html" %}
+{% load static %}
 {% block content %}
 {% if output %}<pre>{{ output }}</pre>{% endif %}
 <form method="post" enctype="multipart/form-data">
   {% csrf_token %}
   {{ form.as_p }}
+  <datalist id="chapter-suggestions"></datalist>
+  <datalist id="subtopic-suggestions"></datalist>
+  <p>Start typing to select an existing name, or enter a new one.</p>
   <input type="submit" value="Import PDFs">
 </form>
+{{ catalog|json_script:"import-catalog" }}
+<script defer src="{% static 'question_bank/import.js' %}"></script>
 {% endblock %}
