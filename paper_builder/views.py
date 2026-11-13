@@ -20,6 +20,8 @@ class PaperDetails(forms.Form):
     institution = forms.CharField(max_length=120)
     title = forms.CharField(max_length=120)
     date = forms.DateField(input_formats=["%Y-%m-%d"])
+    start_number = forms.IntegerField(min_value=1, max_value=9999, required=False)
+    end_number = forms.IntegerField(min_value=1, max_value=9999, required=False)
     marks = forms.IntegerField(min_value=1, max_value=10000)
     duration = forms.IntegerField(min_value=1, max_value=1440)
 
@@ -76,8 +78,11 @@ def builder(request):
 def download(request):
     form = PaperDetails(request.POST)
     if not form.is_valid():
-        return HttpResponse("Check the paper details and try again.", status=400, content_type="text/plain")
+        return HttpResponse(" ".join(f"{field.replace('_', ' ').capitalize()}: {' '.join(errors)}"
+                                     for field, errors in form.errors.items()),
+                            status=400, content_type="text/plain")
     details = {**form.cleaned_data, "logo": None}
+    details["start_number"] = details["start_number"] or 1
     try:
         sections = json.loads(request.POST.get("sections", "[]"))
         if not isinstance(sections, list) or not 1 <= len(sections) <= 12:
@@ -116,8 +121,14 @@ def download(request):
                 query = query.filter(difficulty=difficulty)
             candidates = set(query.values_list("pk", flat=True))
             requests.append((subjects[subject], count, candidates))
-        if sum(count for _, count, _ in requests) > 300:
+        total = sum(count for _, count, _ in requests)
+        if total > 300:
             raise ValueError("Use up to 300 questions per paper.")
+        last_number = details["start_number"] + total - 1
+        if last_number > 9999:
+            raise ValueError("The last question number must be 9999 or lower.")
+        if details["end_number"] is not None and details["end_number"] != last_number:
+            raise ValueError(f"{total} questions starting at {details['start_number']} must end at {last_number}.")
         selected = allocate_sections(requests, eligible)
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")

@@ -34,7 +34,7 @@ def build_pdf(details, sections, *, answer_key=False):
         f" &nbsp; | &nbsp; {details['duration']} minutes", body
     ), Spacer(1, 16)])
 
-    number = 0
+    number = details["start_number"] - 1
     for subject, questions in sections:
         heading = Paragraph(subject.upper(), label)
         if answer_key:

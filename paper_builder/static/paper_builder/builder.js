@@ -49,6 +49,13 @@ function refresh() {
     section.querySelector('.remove').hidden = sections.length === 1;
     total += Number(fields(section).count.value);
   });
+  const start = Number(form.elements.start_number.value);
+  const end = start + total - 1;
+  const range = document.querySelector('#number-range');
+  range.textContent = start > 0 && total > 0
+    ? `Paper and answer key numbering: ${start}–${end}` : '';
+  form.elements.end_number.setCustomValidity(form.elements.end_number.value &&
+    Number(form.elements.end_number.value) !== end ? `Enter ${end} or leave the end number blank.` : '');
   addButton.disabled = sections.length >= 12;
   document.querySelector('#total').textContent = `${total} questions selected · up to 300 per paper`;
 }
@@ -62,6 +69,8 @@ function addSection() {
   update(section, 'subject');
 }
 
+form.elements.start_number.addEventListener('input', refresh);
+form.elements.end_number.addEventListener('input', refresh);
 addButton.onclick = addSection;
 addSection();
 form.addEventListener('submit', async event => {

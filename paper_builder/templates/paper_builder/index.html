@@ -29,6 +29,11 @@
 <label>Maximum marks<input name="marks" type="number" min="1" max="10000" value="400" required></label>
 <label>Duration (minutes)<input name="duration" type="number" min="1" max="1440" value="180" required></label>
 </div>
+<div class="grid">
+<label>Start number<input name="start_number" type="number" min="1" max="9999" value="1" required></label>
+<label>End number <span class="muted">(optional)</span><input name="end_number" type="number" min="1" max="9999" placeholder="Automatic"></label>
+</div>
+<p id="number-range" class="muted" aria-live="polite"></p>
 <label>Logo <span class="muted">(optional)</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
 <p id="total" aria-live="polite"></p>
 <button class="primary" type="submit">Generate &amp; download PDFs</button>
