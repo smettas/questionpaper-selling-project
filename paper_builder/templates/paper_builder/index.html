@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEET Paper Builder</title>
+<link rel="stylesheet" href="{% static 'paper_builder/builder.css' %}">
+<script defer src="{% static 'paper_builder/builder.js' %}"></script>
+</head>
+<body>
+<header><div class="brand">NEET Paper Builder</div></header>
+<main>
+<h1>Create a question paper</h1>
+<p class="intro">Choose questions from the bank and download a branded paper with a matching answer key.</p>
+<form id="paper-form" action="{% url 'download' %}" method="post" enctype="multipart/form-data">
+{% csrf_token %}
+<div class="workspace">
+<section class="card bank">
+<h2>Question selection</h2>
+<div id="sections"></div>
+<button type="button" id="add-section" class="secondary">+ Add section</button>
+</section>
+<section class="card details">
+<h2>Paper details</h2>
+<label>School or academy<input name="institution" required maxlength="120" placeholder="Ojas One Academy"></label>
+<label>Paper title<input name="title" required maxlength="120" value="NEET Practice Test"></label>
+<label>Exam date<input name="date" type="date" value="{{ today }}" required></label>
+<div class="grid">
+<label>Maximum marks<input name="marks" type="number" min="1" max="10000" value="400" required></label>
+<label>Duration (minutes)<input name="duration" type="number" min="1" max="1440" value="180" required></label>
+</div>
+<label>Logo <span class="muted">(optional)</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
+<p id="total" aria-live="polite"></p>
+<button class="primary" type="submit">Generate &amp; download PDFs</button>
+<p id="status" role="status"></p>
+</section>
+</div>
+</form>
+</main>
+<template id="section-template">
+<fieldset>
+<legend></legend>
+<div class="grid">
+<label>Subject<select data-field="subject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="biology">Biology</option></select></label>
+<label>Chapter<select data-field="chapter"></select></label>
+<label>Subtopic<select data-field="topic"></select></label>
+<label>Difficulty<select data-field="difficulty"><option value="">All difficulties</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+<label>Questions<input data-field="count" type="number" required min="1" value="10"></label>
+</div>
+<div class="section-footer"><span class="available" aria-live="polite"></span><button type="button" class="remove">Remove section</button></div>
+</fieldset>
+</template>
+{{ catalog|json_script:"catalog" }}
+</body></html>
