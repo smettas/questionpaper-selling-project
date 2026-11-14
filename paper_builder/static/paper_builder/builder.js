@@ -12,7 +12,7 @@ const selected = new Map();
 const status = document.querySelector('#status');
 const submit = form.querySelector('[type="submit"]');
 const downloads = document.querySelector('#downloads');
-const links = [document.querySelector('#question-pdf'), document.querySelector('#answer-pdf')];
+
 const previous = document.querySelector('#previous');
 const next = document.querySelector('#next');
 let page = 1;
@@ -46,10 +46,8 @@ function clearDownloads() {
   revision++;
   status.textContent = '';
   downloads.hidden = true;
-  for (const link of links) {
-    if (link.hasAttribute('href')) URL.revokeObjectURL(link.href);
-    link.removeAttribute('href');
-  }
+  for (const link of downloads.querySelectorAll('a')) URL.revokeObjectURL(link.href);
+  downloads.replaceChildren();
 }
 
 function refreshSelection() {
@@ -175,19 +173,24 @@ form.addEventListener('submit', async event => {
   const generation = revision;
   const data = new FormData(form);
   data.set('question_ids', JSON.stringify(Array.from(selected.keys())));
-  status.textContent = 'Generating your PDFs…';
+  status.textContent = 'Generating your files…';
   submit.disabled = true;
   try {
     const response = await fetch(form.action, {method: 'POST', body: data});
-    if (!response.ok) throw new Error(response.status === 400 ? await response.text() : 'PDF generation failed.');
-    const pdfs = await response.json();
+    if (!response.ok) throw new Error(response.status === 400 ? await response.text() : 'File generation failed.');
+    const {files} = await response.json();
     if (generation !== revision) return;
-    [pdfs.question, pdfs.answer].forEach((encoded, index) => {
-      const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
-      links[index].href = URL.createObjectURL(new Blob([bytes], {type: 'application/pdf'}));
-    });
+    for (const file of files) {
+      const bytes = Uint8Array.from(atob(file.data), char => char.charCodeAt(0));
+      const link = document.createElement('a');
+      link.className = 'download';
+      link.download = file.name;
+      link.textContent = file.name;
+      link.href = URL.createObjectURL(new Blob([bytes], {type: file.type}));
+      downloads.append(link);
+    }
     downloads.hidden = false;
-    status.textContent = 'Both PDFs are ready.';
+    status.textContent = 'Your files are ready.';
   } catch (error) {
     if (generation === revision) status.textContent = error.message;
   } finally {

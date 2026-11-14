@@ -13,9 +13,14 @@ from PIL import Image
 from question_bank.models import Chapter, Question, Subtopic
 
 from .pdf import build_pdf
+from .word import build_word
 
 
 class PaperDetails(forms.Form):
+    option_layout = forms.ChoiceField(choices=[(v, v) for v in ("one", "two", "four")], required=False)
+    page_columns = forms.ChoiceField(choices=[(v, v) for v in ("one", "two")], required=False)
+    arrangement = forms.ChoiceField(choices=[(v, v) for v in ("separate", "combined", "paired")], required=False)
+    output_format = forms.ChoiceField(choices=[(v, v) for v in ("pdf", "docx", "both")], required=False)
     institution = forms.CharField(max_length=120, required=False)
     title = forms.CharField(max_length=120, required=False)
     date = forms.DateField(input_formats=["%Y-%m-%d"], required=False)
@@ -125,9 +130,22 @@ def download(request):
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")
 
-    response = JsonResponse({
-        "question": b64encode(build_pdf(details, selected)).decode("ascii"),
-        "answer": b64encode(build_pdf(details, selected, answer_key=True)).decode("ascii"),
-    })
+    arrangement = details["arrangement"] or "separate"
+    output_format = details["output_format"] or "pdf"
+    modes = [("question", "Question Paper"), ("answer", "Answer Key")] if arrangement == "separate" else [
+        (arrangement, "Question Paper and Answers" if arrangement == "combined" else "Questions with Answers")]
+    files = []
+    try:
+        for mode, title in modes:
+            if output_format in ("pdf", "both"):
+                files.append({"name": f"{title}.pdf", "type": "application/pdf",
+                              "data": b64encode(build_pdf(details, selected, mode=mode)).decode("ascii")})
+            if output_format in ("docx", "both"):
+                files.append({"name": f"{title}.docx",
+                              "type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                              "data": b64encode(build_word(details, selected, mode)).decode("ascii")})
+    except ValueError as exc:
+        return HttpResponse(str(exc), status=400, content_type="text/plain")
+    response = JsonResponse({"files": files})
     response["Cache-Control"] = "no-store"
     return response

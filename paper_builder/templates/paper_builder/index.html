@@ -49,11 +49,17 @@
 <h3>Selected questions</h3>
 <p id="total" aria-live="polite"></p>
 <ol id="selected"></ol>
-<button class="primary" type="submit">Generate PDFs</button>
-<div id="downloads" hidden>
-<a id="question-pdf" class="download" download="Question Paper.pdf">Question Paper PDF</a>
-<a id="answer-pdf" class="download" download="Answer Key.pdf">Answer Key PDF</a>
+<fieldset class="export-settings">
+<legend>Export settings</legend>
+<div class="grid">
+<label>Paper columns<select name="page_columns"><option value="one">One column</option><option value="two">Two columns</option></select></label>
+<label>Option layout<select name="option_layout"><option value="one">One per row</option><option value="two">Two per row if they fit</option><option value="four">Four per row if they fit</option></select></label>
+<label>Answer arrangement<select name="arrangement"><option value="separate">Separate files</option><option value="combined">Answer key at the end</option><option value="paired">Answer after each question</option></select></label>
+<label>File format<select name="output_format"><option value="pdf">PDF</option><option value="docx">Word</option><option value="both">PDF and Word</option></select></label>
 </div>
+</fieldset>
+<button class="primary" type="submit">Generate files</button>
+<div id="downloads" hidden aria-label="Downloads"></div>
 <p id="status" role="status"></p>
 </section>
 </div>
