@@ -41,6 +41,7 @@ class Question(models.Model):
     difficulty = models.CharField(max_length=8, choices=Difficulty.choices)
     correct_option = models.PositiveSmallIntegerField(choices=[(i, str(i)) for i in range(1, 5)])
     artwork = models.ImageField(upload_to="questions/")
+    hint = models.ImageField(upload_to="hints/", blank=True)
     fingerprint = models.CharField(max_length=64, unique=True)
     active = models.BooleanField(default=True)
 

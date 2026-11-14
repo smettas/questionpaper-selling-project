@@ -9,6 +9,18 @@ from reportlab.platypus import Image as PDFImage
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
+def artwork_image(field, max_width):
+    with field.open("rb") as asset, Image.open(asset) as source:
+        bitmap = BytesIO()
+        source.convert("RGB").save(bitmap, "PNG")
+    picture = PDFImage(bitmap)
+    scale = min(.52, max_width / picture.imageWidth, 680 / picture.imageHeight)
+    picture.drawWidth = picture.imageWidth * scale
+    picture.drawHeight = picture.imageHeight * scale
+    picture.hAlign = "LEFT"
+    return picture
+
+
 def build_pdf(details, sections, *, answer_key=False):
     output = BytesIO()
     document = SimpleDocTemplate(
@@ -37,6 +49,14 @@ def build_pdf(details, sections, *, answer_key=False):
     number = details["start_number"] - 1
     for subject, questions in sections:
         heading = Paragraph(subject.upper(), label)
+        if answer_key and any(question.hint for question in questions):
+            for index, question in enumerate(questions):
+                number += 1
+                entry = [Paragraph(f"{number}.  ({question.correct_option})", label)]
+                if question.hint:
+                    entry.append(artwork_image(question.hint, document.width - 12))
+                flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 9)]))
+            continue
         if answer_key:
             answers = []
             for question in questions:
@@ -55,13 +75,7 @@ def build_pdf(details, sections, *, answer_key=False):
             continue
         for index, question in enumerate(questions):
             number += 1
-            with question.artwork.open("rb") as asset, Image.open(asset) as source:
-                bitmap = BytesIO()
-                source.convert("RGB").save(bitmap, "PNG")
-            picture = PDFImage(bitmap)
-            scale = min(.52, (document.width - 46) / picture.imageWidth, 680 / picture.imageHeight)
-            picture.drawWidth = picture.imageWidth * scale
-            picture.drawHeight = picture.imageHeight * scale
+            picture = artwork_image(question.artwork, document.width - 46)
             table = Table([[Paragraph(f"{number}.", label), picture]], colWidths=[40, document.width - 40])
             table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                        ("ALIGN", (1, 0), (1, 0), "LEFT")]))

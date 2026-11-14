@@ -1,6 +1,7 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 {% block content %}
+<p>When the answer PDF contains a Hints and Solutions section, use numbered entries like 1. Ans (2). The importer uses that section and saves its explanations.</p>
 {% if output %}<pre>{{ output }}</pre>{% endif %}
 <form method="post" enctype="multipart/form-data">
   {% csrf_token %}

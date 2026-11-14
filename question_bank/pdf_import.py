@@ -243,12 +243,14 @@ def _segments(doc, *, answer_tables=False):
     return items, key_rows
 
 
-def inspect_papers(question_pdf, answer_pdf, count, *, overrides=None):
+def inspect_papers(question_pdf, answer_pdf, count, *, overrides=None, hints=None):
     with pdfplumber.open(io.BytesIO(question_pdf)) as q, pdfplumber.open(io.BytesIO(answer_pdf)) as a, pdfium.PdfDocument(answer_pdf) as key_doc:
         questions, _ = _segments(q)
         _validate_numbers([n for n, _ in questions], count, 'Question paper')
         if [n for n, _ in questions] != list(range(1, count + 1)):
             raise ValueError('Question numbering does not follow the detected page and column order.')
+        if hints is not None:
+            return [(n, boxes, hints[n][0], hints[n][1]) for n, boxes in questions]
         answers, key_rows = _segments(a, answer_tables=True)
         explanations = {}
         for n, boxes in answers:

@@ -5,6 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from question_bank.hints import read_hints
 from question_bank.models import Chapter, Question, Subtopic
 from question_bank.pdf_import import (
     MAX_BYTES, NUMBER, inspect_papers, missing_option_markers, pdfium, pdfplumber, render_crop,
@@ -49,12 +50,14 @@ class Command(BaseCommand):
             if any(path.stat().st_size > MAX_BYTES for path in sources):
                 raise ValueError("Each PDF must be 25 MB or smaller.")
             questions, answers = (path.read_bytes() for path in sources)
-            specs = inspect_papers(questions, answers, count)
+            hints = read_hints(answers, count)
+            specs = inspect_papers(questions, answers, count, hints=hints)
             prepared = []
             warnings = []
-            with pdfplumber.open(sources[0]) as text, pdfium.PdfDocument(questions) as document:
+            with (pdfplumber.open(sources[0]) as text, pdfium.PdfDocument(questions) as document,
+                  pdfium.PdfDocument(answers) as solutions):
                 words = [page.extract_words() for page in text.pages]
-                for number, boxes, answer, _ in specs:
+                for number, boxes, answer, solution in specs:
                     page, left, top, right, bottom = boxes[0]
                     candidates = [word for word in words[page - 1]
                                   if left <= word["x0"] <= left + 50
@@ -75,22 +78,31 @@ class Command(BaseCommand):
                     if missing:
                         warnings.append(number)
                     image, _, _ = render_crop(document, boxes, first_mask=mask)
-                    prepared.append((answer, image, sha256(image).hexdigest(), bool(missing)))
+                    hint_image = None
+                    if hints is not None:
+                        hint_image, _, _ = render_crop(solutions, solution, first_mask=hints[number][2])
+                    prepared.append((answer, image, sha256(image).hexdigest(), bool(missing), hint_image))
         except (OSError, ValueError) as exc:
             raise CommandError(str(exc)) from exc
 
         saved = []
+        imported = updated = 0
         try:
             with transaction.atomic():
                 chapter = reuse_named_entry(
                     Chapter, options["chapter"], subject=options["subject"], level=options["level"],
                 )
                 subtopic = reuse_named_entry(Subtopic, options["subtopic"], chapter=chapter)
-                for answer, image, fingerprint, needs_review in prepared:
+                for answer, image, fingerprint, needs_review, hint_image in prepared:
                     existing = Question.objects.filter(fingerprint=fingerprint).first()
                     if existing:
                         if existing.correct_option != answer:
                             raise CommandError(f"Conflicting answer key for existing question {existing.pk}.")
+                        if hint_image and not existing.hint:
+                            existing.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
+                            saved.append(existing.hint)
+                            existing.save(update_fields=["hint"])
+                            updated += 1
                         continue
                     question = Question(
                         subtopic=subtopic, difficulty=options["difficulty"], correct_option=answer,
@@ -98,11 +110,15 @@ class Command(BaseCommand):
                     )
                     question.artwork.save(f"{fingerprint}.webp", ContentFile(image), save=False)
                     saved.append(question.artwork)
+                    if hint_image:
+                        question.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
+                        saved.append(question.hint)
                     question.save()
+                    imported += 1
         except Exception:
             for asset in saved:
                 asset.storage.delete(asset.name)
             raise
-        self.stdout.write(self.style.SUCCESS(f"Imported {len(saved)} new questions. Skipped {count - len(saved)} duplicates."))
+        self.stdout.write(self.style.SUCCESS(f"Imported {imported} new questions. Added hints to {updated} existing questions. Skipped {count - imported - updated} duplicates."))
         if warnings:
             self.stdout.write(self.style.WARNING(f"Check option labels before activating source questions: {warnings}."))
