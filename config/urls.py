@@ -19,6 +19,8 @@ def health(request):
 
 urlpatterns = [
     path("", views.builder, name="builder"),
+    path("questions/", views.browse_questions, name="browse-questions"),
+    path("questions/<int:pk>/<str:kind>/", views.question_asset, name="question-asset"),
     path("download/", views.download, name="download"),
     path("health/", health, name="health"),
     path("admin/import-questions/", admin.site.admin_view(import_questions), name="import_questions"),

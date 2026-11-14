@@ -1,12 +1,12 @@
 import json
-import random
-import zipfile
+from base64 import b64encode
 from io import BytesIO
 
 from django import forms
-from django.db.models import Count
-from django.http import HttpResponse
-from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 from PIL import Image
 
@@ -25,51 +25,48 @@ class PaperDetails(forms.Form):
     duration = forms.IntegerField(min_value=1, max_value=1440, required=False)
 
 
-def allocate_sections(requests, eligible):
-    # Match each requested slot to a distinct question. If two sections
-    # overlap, reassign an earlier slot before declaring a shortage.
-    pools = []
-    owners = {}
-    for subject, count, candidates in requests:
-        if len(candidates) < count:
-            raise ValueError(f"{subject} has only {len(candidates)} matching questions.")
-        pool = sorted(candidates)
-        random.shuffle(pool)
-        pools.append(pool)
-
-    def assign(section, visited):
-        for question_id in pools[section]:
-            if question_id in visited:
-                continue
-            visited.add(question_id)
-            previous = owners.get(question_id)
-            if previous is None or assign(previous, visited):
-                owners[question_id] = section
-                return True
-        return False
-
-    for index, (subject, count, _) in enumerate(requests):
-        for _ in range(count):
-            if not assign(index, set()):
-                raise ValueError(f"Section {index + 1} overlaps another selection. Reduce the counts or change the filters.")
-
-    questions = eligible.in_bulk(owners.keys())
-    if len(questions) != len(owners):
-        raise ValueError("The question bank changed. Refresh and try again.")
-    selected = [(subject, []) for subject, _, _ in requests]
-    for question_id, index in owners.items():
-        selected[index][1].append(questions[question_id])
-    return selected
-
-
 @require_GET
 def builder(request):
     chapters = list(Chapter.objects.values("id", "subject", "level", "name"))
     topics = list(Subtopic.objects.values("id", "chapter_id", "name"))
-    counts = list(Question.objects.filter(active=True).values("subtopic_id", "difficulty").annotate(total=Count("id")))
     return render(request, "paper_builder/index.html", {
-        "catalog": {"chapters": chapters, "topics": topics, "counts": counts},
+        "catalog": {"chapters": chapters, "topics": topics},
     })
+
+
+@require_GET
+def browse_questions(request):
+    subjects = dict(Chapter.Subject.choices)
+    subject = request.GET.get("subject", "")
+    difficulty = request.GET.get("difficulty", "")
+    if subject not in subjects or difficulty not in ("", *Question.Difficulty.values):
+        return JsonResponse({"error": "Choose a subject and difficulty."}, status=400)
+    query = Question.objects.filter(active=True, subtopic__chapter__subject=subject)
+    for key, field in (("chapter", "subtopic__chapter_id"), ("topic", "subtopic_id")):
+        value = request.GET.get(key)
+        if value:
+            if not value.isascii() or not value.isdecimal() or len(value) > 18:
+                return JsonResponse({"error": "Invalid filter."}, status=400)
+            query = query.filter(**{field: int(value)})
+    paginator = Paginator(query.order_by("pk"), 12)
+    page = paginator.get_page(request.GET.get("page", 1))
+    return JsonResponse({
+        "count": paginator.count, "page": page.number, "pages": paginator.num_pages,
+        "questions": [{
+            "id": row.pk, "subject": subjects[subject], "answer": row.correct_option,
+            "image": reverse("question-asset", args=[row.pk, "question"]),
+            "hint": reverse("question-asset", args=[row.pk, "hint"]) if row.hint else None,
+        } for row in page],
+    })
+
+
+@require_GET
+def question_asset(request, pk, kind):
+    question = get_object_or_404(Question, pk=pk, active=True)
+    asset = {"question": question.artwork, "hint": question.hint}.get(kind)
+    if not asset:
+        raise Http404
+    return FileResponse(asset.open("rb"), content_type="image/webp")
 
 
 @require_POST
@@ -82,9 +79,11 @@ def download(request):
     details = {**form.cleaned_data, "logo": None}
     details["start_number"] = details["start_number"] or 1
     try:
-        sections = json.loads(request.POST.get("sections", "[]"))
-        if not isinstance(sections, list) or not 1 <= len(sections) <= 12:
-            raise ValueError("Add 1 to 12 sections.")
+        ids = json.loads(request.POST.get("question_ids", "[]"))
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 300
+                or any(type(pk) is not int or not 1 <= pk < 2**63 for pk in ids)
+                or len(set(ids)) != len(ids)):
+            raise ValueError("Pick between 1 and 300 distinct questions.")
         logo = request.FILES.get("logo")
         if logo:
             if logo.size > 2_000_000:
@@ -100,41 +99,28 @@ def download(request):
             except (OSError, Image.DecompressionBombError) as exc:
                 raise ValueError("The logo could not be opened.") from exc
 
-        eligible = Question.objects.filter(active=True)
-        subjects = dict(Chapter.Subject.choices)
-        requests = []
-        for section in sections:
-            if not isinstance(section, dict):
-                raise ValueError("Invalid section.")
-            subject, difficulty = section.get("subject"), section.get("difficulty")
-            count = int(section.get("count"))
-            if subject not in subjects or difficulty not in ["", *Question.Difficulty.values] or count < 1:
-                raise ValueError("Check the subject, difficulty and quantity for each section.")
-            query = eligible.filter(subtopic__chapter__subject=subject)
-            if section.get("chapter"):
-                query = query.filter(subtopic__chapter_id=int(section["chapter"]))
-            if section.get("topic"):
-                query = query.filter(subtopic_id=int(section["topic"]))
-            if difficulty:
-                query = query.filter(difficulty=difficulty)
-            candidates = set(query.values_list("pk", flat=True))
-            requests.append((subjects[subject], count, candidates))
-        total = sum(count for _, count, _ in requests)
-        if total > 300:
-            raise ValueError("Use up to 300 questions per paper.")
+        rows = Question.objects.filter(active=True).select_related("subtopic__chapter").in_bulk(ids)
+        if len(rows) != len(ids):
+            raise ValueError("A selected question is no longer available. Refresh and pick again.")
+        total = len(ids)
         last_number = details["start_number"] + total - 1
         if last_number > 9999:
             raise ValueError("The last question number must be 9999 or lower.")
         if details["end_number"] is not None and details["end_number"] != last_number:
             raise ValueError(f"{total} questions starting at {details['start_number']} must end at {last_number}.")
-        selected = allocate_sections(requests, eligible)
+        selected = []
+        for pk in ids:
+            question = rows[pk]
+            subject = question.subtopic.chapter.get_subject_display()
+            if not selected or selected[-1][0] != subject:
+                selected.append((subject, []))
+            selected[-1][1].append(question)
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")
 
-    bundle = BytesIO()
-    with zipfile.ZipFile(bundle, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("Question Paper.pdf", build_pdf(details, selected))
-        archive.writestr("Answer Key.pdf", build_pdf(details, selected, answer_key=True))
-    response = HttpResponse(bundle.getvalue(), content_type="application/zip")
-    response["Content-Disposition"] = 'attachment; filename="NEET Paper and Answer Key.zip"'
+    response = JsonResponse({
+        "question": b64encode(build_pdf(details, selected)).decode("ascii"),
+        "answer": b64encode(build_pdf(details, selected, answer_key=True)).decode("ascii"),
+    })
+    response["Cache-Control"] = "no-store"
     return response

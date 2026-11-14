@@ -104,8 +104,8 @@ class Command(BaseCommand):
                     if existing:
                         if existing.correct_option != answer:
                             raise CommandError(f"Conflicting answer key for existing question {existing.pk}.")
-                        if is_aligned and not Path(existing.artwork.name).name.startswith("aligned-v2-"):
-                            existing.artwork.save(f"aligned-v2-{fingerprint}.webp", ContentFile(image), save=False)
+                        if is_aligned and not Path(existing.artwork.name).name.startswith("aligned-v3-"):
+                            existing.artwork.save(f"aligned-v3-{fingerprint}.webp", ContentFile(image), save=False)
                             saved.append(existing.artwork)
                             existing.save(update_fields=["artwork"])
                             aligned_count += 1
@@ -119,7 +119,7 @@ class Command(BaseCommand):
                         subtopic=subtopic, difficulty=options["difficulty"], correct_option=answer,
                         fingerprint=fingerprint, active=options["publish"] and not needs_review,
                     )
-                    filename = f"aligned-v2-{fingerprint}.webp" if is_aligned else f"{fingerprint}.webp"
+                    filename = f"aligned-v3-{fingerprint}.webp" if is_aligned else f"{fingerprint}.webp"
                     question.artwork.save(filename, ContentFile(image), save=False)
                     saved.append(question.artwork)
                     if hint_image:
