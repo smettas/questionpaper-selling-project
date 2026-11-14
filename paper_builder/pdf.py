@@ -10,6 +10,9 @@ from reportlab.platypus import Image as PDFImage
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
+from .structured import question_blocks
+
+
 def artwork_image(field, max_width):
     with field.open("rb") as asset, Image.open(asset) as source:
         bitmap = BytesIO()
@@ -22,7 +25,7 @@ def artwork_image(field, max_width):
     return picture
 
 
-def build_pdf(details, sections, *, answer_key=False):
+def build_pdf(details, sections, *, answer_key=False, preview=False):
     output = BytesIO()
     document = SimpleDocTemplate(
         output, pagesize=A4, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40,
@@ -68,11 +71,13 @@ def build_pdf(details, sections, *, answer_key=False):
     number = details["start_number"] - 1
     for subject, questions in sections:
         heading = Paragraph(subject.upper(), label)
-        if answer_key and any(question.hint for question in questions):
+        if answer_key and any(question.hint or question.structured for question in questions):
             for index, question in enumerate(questions):
                 number += 1
-                entry = [Paragraph(f"{number}.  ({question.correct_option})", label)]
-                if question.hint:
+                entry = [Paragraph(f"({question.correct_option})" if preview else f"{number}.  ({question.correct_option})", label)]
+                if question.structured:
+                    entry.extend(question_blocks(question.structured, width, answer_key=True))
+                elif question.hint:
                     entry.append(artwork_image(question.hint, document.width - 12))
                 flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 9)]))
             continue
@@ -94,6 +99,10 @@ def build_pdf(details, sections, *, answer_key=False):
             continue
         for index, question in enumerate(questions):
             number += 1
+            if question.structured:
+                entry = question_blocks(question.structured, width, prefix="" if preview else f"{number}. ")
+                flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 8)]))
+                continue
             picture = artwork_image(question.artwork, document.width - 52)
             table = Table([[Paragraph(f"{number}.", label), picture]], colWidths=[40, width - 40])
             table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),

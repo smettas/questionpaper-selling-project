@@ -54,8 +54,9 @@ def browse_questions(request):
         "count": paginator.count, "page": page.number, "pages": paginator.num_pages,
         "questions": [{
             "id": row.pk, "subject": subjects[subject], "answer": row.correct_option,
+            "structured": bool(row.structured),
             "image": reverse("question-asset", args=[row.pk, "question"]),
-            "hint": reverse("question-asset", args=[row.pk, "hint"]) if row.hint else None,
+            "hint": reverse("question-asset", args=[row.pk, "hint"]) if row.hint or row.structured else None,
         } for row in page],
     })
 
@@ -63,6 +64,10 @@ def browse_questions(request):
 @require_GET
 def question_asset(request, pk, kind):
     question = get_object_or_404(Question, pk=pk, active=True)
+    if question.structured and kind in ("question", "hint"):
+        details = dict(title="", institution="", logo=None, date=None, marks=None, duration=None, start_number=1)
+        return HttpResponse(build_pdf(details, [("Preview", [question])], answer_key=kind == "hint", preview=True),
+                            content_type="application/pdf")
     asset = {"question": question.artwork, "hint": question.hint}.get(kind)
     if not asset:
         raise Http404

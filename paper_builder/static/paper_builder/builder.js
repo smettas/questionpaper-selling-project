@@ -87,7 +87,15 @@ function toggle(question) {
   refreshSelection();
 }
 
-function previewImage(url, alt) {
+function previewImage(url, alt, structured) {
+  if (structured) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = `Open ${alt} (PDF)`;
+    return link;
+  }
   const image = document.createElement('img');
   image.src = url;
   image.alt = alt;
@@ -108,13 +116,13 @@ function showQuestions(questions) {
     const answer = document.createElement('p');
     answer.textContent = `Correct option: (${question.answer})`;
     solution.append(title, answer, question.hint
-      ? previewImage(question.hint, `Worked solution for question ${question.id}`) : 'No worked solution was uploaded.');
+      ? previewImage(question.hint, `Worked solution for question ${question.id}`, question.structured) : 'No worked solution was uploaded.');
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'secondary';
     add.dataset.questionId = question.id;
     add.onclick = () => toggle(question);
-    card.append(caption, previewImage(question.image, `Question ${question.id}`), solution, add);
+    card.append(caption, previewImage(question.image, `Question ${question.id}`, question.structured), solution, add);
     results.append(card);
   }
   refreshSelection();

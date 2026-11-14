@@ -42,6 +42,7 @@ class Question(models.Model):
     correct_option = models.PositiveSmallIntegerField(choices=[(i, str(i)) for i in range(1, 5)])
     artwork = models.ImageField(upload_to="questions/")
     hint = models.ImageField(upload_to="hints/", blank=True)
+    structured = models.JSONField(default=dict, blank=True)
     fingerprint = models.CharField(max_length=64, unique=True)
     active = models.BooleanField(default=True)
 
