@@ -7,7 +7,6 @@ from django import forms
 from django.db.models import Count
 from django.http import HttpResponse
 from django.shortcuts import render
-from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from PIL import Image
 
@@ -17,13 +16,13 @@ from .pdf import build_pdf
 
 
 class PaperDetails(forms.Form):
-    institution = forms.CharField(max_length=120)
-    title = forms.CharField(max_length=120)
-    date = forms.DateField(input_formats=["%Y-%m-%d"])
+    institution = forms.CharField(max_length=120, required=False)
+    title = forms.CharField(max_length=120, required=False)
+    date = forms.DateField(input_formats=["%Y-%m-%d"], required=False)
     start_number = forms.IntegerField(min_value=1, max_value=9999, required=False)
     end_number = forms.IntegerField(min_value=1, max_value=9999, required=False)
-    marks = forms.IntegerField(min_value=1, max_value=10000)
-    duration = forms.IntegerField(min_value=1, max_value=1440)
+    marks = forms.IntegerField(min_value=1, max_value=10000, required=False)
+    duration = forms.IntegerField(min_value=1, max_value=1440, required=False)
 
 
 def allocate_sections(requests, eligible):
@@ -70,7 +69,6 @@ def builder(request):
     counts = list(Question.objects.filter(active=True).values("subtopic_id", "difficulty").annotate(total=Count("id")))
     return render(request, "paper_builder/index.html", {
         "catalog": {"chapters": chapters, "topics": topics, "counts": counts},
-        "today": timezone.localdate().isoformat(),
     })
 
 

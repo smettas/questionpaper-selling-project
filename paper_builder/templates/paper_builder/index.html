@@ -21,13 +21,13 @@
 <button type="button" id="add-section" class="secondary">+ Add section</button>
 </section>
 <section class="card details">
-<h2>Paper details</h2>
-<label>School or academy<input name="institution" required maxlength="120" placeholder="Ojas One Academy"></label>
-<label>Paper title<input name="title" required maxlength="120" value="NEET Practice Test"></label>
-<label>Exam date<input name="date" type="date" value="{{ today }}" required></label>
+<h2>Paper details <span class="muted">(optional)</span></h2>
+<label>School or academy<input name="institution" maxlength="120" placeholder="Ojas One Academy"></label>
+<label>Paper title<input name="title" maxlength="120"></label>
+<label>Exam date<input name="date" type="date"></label>
 <div class="grid">
-<label>Maximum marks<input name="marks" type="number" min="1" max="10000" value="400" required></label>
-<label>Duration (minutes)<input name="duration" type="number" min="1" max="1440" value="180" required></label>
+<label>Maximum marks<input name="marks" type="number" min="1" max="10000"></label>
+<label>Duration (minutes)<input name="duration" type="number" min="1" max="1440"></label>
 </div>
 <div class="grid">
 <label>Start number<input name="start_number" type="number" min="1" max="9999" value="1" required></label>

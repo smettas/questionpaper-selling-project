@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from question_bank.hints import read_hints
+from question_bank.option_layout import aligned_artwork
 from question_bank.models import Chapter, Question, Subtopic
 from question_bank.pdf_import import (
     MAX_BYTES, NUMBER, inspect_papers, missing_option_markers, pdfium, pdfplumber, render_crop,
@@ -54,6 +55,7 @@ class Command(BaseCommand):
             specs = inspect_papers(questions, answers, count, hints=hints)
             prepared = []
             warnings = []
+            original_layout = []
             with (pdfplumber.open(sources[0]) as text, pdfium.PdfDocument(questions) as document,
                   pdfium.PdfDocument(answers) as solutions):
                 words = [page.extract_words() for page in text.pages]
@@ -78,26 +80,35 @@ class Command(BaseCommand):
                     if missing:
                         warnings.append(number)
                     image, _, _ = render_crop(document, boxes, first_mask=mask)
+                    fingerprint = sha256(image).hexdigest()
+                    aligned = aligned_artwork(document, text.pages[page - 1], boxes[0], mask) if len(boxes) == 1 else None
+                    if aligned is None:
+                        original_layout.append(number)
                     hint_image = None
                     if hints is not None:
                         hint_image, _, _ = render_crop(solutions, solution, first_mask=hints[number][2])
-                    prepared.append((answer, image, sha256(image).hexdigest(), bool(missing), hint_image))
+                    prepared.append((answer, aligned or image, fingerprint, bool(missing), hint_image, aligned is not None))
         except (OSError, ValueError) as exc:
             raise CommandError(str(exc)) from exc
 
         saved = []
-        imported = updated = 0
+        imported = updated = aligned_count = 0
         try:
             with transaction.atomic():
                 chapter = reuse_named_entry(
                     Chapter, options["chapter"], subject=options["subject"], level=options["level"],
                 )
                 subtopic = reuse_named_entry(Subtopic, options["subtopic"], chapter=chapter)
-                for answer, image, fingerprint, needs_review, hint_image in prepared:
+                for answer, image, fingerprint, needs_review, hint_image, is_aligned in prepared:
                     existing = Question.objects.filter(fingerprint=fingerprint).first()
                     if existing:
                         if existing.correct_option != answer:
                             raise CommandError(f"Conflicting answer key for existing question {existing.pk}.")
+                        if is_aligned and not Path(existing.artwork.name).name.startswith("aligned-"):
+                            existing.artwork.save(f"aligned-{fingerprint}.webp", ContentFile(image), save=False)
+                            saved.append(existing.artwork)
+                            existing.save(update_fields=["artwork"])
+                            aligned_count += 1
                         if hint_image and not existing.hint:
                             existing.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
                             saved.append(existing.hint)
@@ -108,7 +119,8 @@ class Command(BaseCommand):
                         subtopic=subtopic, difficulty=options["difficulty"], correct_option=answer,
                         fingerprint=fingerprint, active=options["publish"] and not needs_review,
                     )
-                    question.artwork.save(f"{fingerprint}.webp", ContentFile(image), save=False)
+                    filename = f"aligned-{fingerprint}.webp" if is_aligned else f"{fingerprint}.webp"
+                    question.artwork.save(filename, ContentFile(image), save=False)
                     saved.append(question.artwork)
                     if hint_image:
                         question.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
@@ -120,5 +132,9 @@ class Command(BaseCommand):
                 asset.storage.delete(asset.name)
             raise
         self.stdout.write(self.style.SUCCESS(f"Imported {imported} new questions. Added hints to {updated} existing questions. Skipped {count - imported - updated} duplicates."))
+        if aligned_count:
+            self.stdout.write(f"Realigned options for {aligned_count} existing questions.")
+        if original_layout:
+            self.stdout.write(f"Original option layout retained for questions: {original_layout}.")
         if warnings:
             self.stdout.write(self.style.WARNING(f"Check option labels before activating source questions: {warnings}."))
