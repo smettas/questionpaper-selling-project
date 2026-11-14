@@ -104,13 +104,13 @@ class Command(BaseCommand):
                     if existing:
                         if existing.correct_option != answer:
                             raise CommandError(f"Conflicting answer key for existing question {existing.pk}.")
-                        if is_aligned and not Path(existing.artwork.name).name.startswith("aligned-"):
-                            existing.artwork.save(f"aligned-{fingerprint}.webp", ContentFile(image), save=False)
+                        if is_aligned and not Path(existing.artwork.name).name.startswith("aligned-v2-"):
+                            existing.artwork.save(f"aligned-v2-{fingerprint}.webp", ContentFile(image), save=False)
                             saved.append(existing.artwork)
                             existing.save(update_fields=["artwork"])
                             aligned_count += 1
-                        if hint_image and not existing.hint:
-                            existing.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
+                        if hint_image and not Path(existing.hint.name or "").name.startswith("hint-v2-"):
+                            existing.hint.save(f"hint-v2-{fingerprint}.webp", ContentFile(hint_image), save=False)
                             saved.append(existing.hint)
                             existing.save(update_fields=["hint"])
                             updated += 1
@@ -119,11 +119,11 @@ class Command(BaseCommand):
                         subtopic=subtopic, difficulty=options["difficulty"], correct_option=answer,
                         fingerprint=fingerprint, active=options["publish"] and not needs_review,
                     )
-                    filename = f"aligned-{fingerprint}.webp" if is_aligned else f"{fingerprint}.webp"
+                    filename = f"aligned-v2-{fingerprint}.webp" if is_aligned else f"{fingerprint}.webp"
                     question.artwork.save(filename, ContentFile(image), save=False)
                     saved.append(question.artwork)
                     if hint_image:
-                        question.hint.save(f"{fingerprint}.webp", ContentFile(hint_image), save=False)
+                        question.hint.save(f"hint-v2-{fingerprint}.webp", ContentFile(hint_image), save=False)
                         saved.append(question.hint)
                     question.save()
                     imported += 1

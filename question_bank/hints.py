@@ -54,6 +54,24 @@ def read_hints(payload, count):
                 mask = (min(char["x0"] for char in prefix), min(char["top"] for char in prefix),
                         max(char["x1"] for char in prefix), max(char["bottom"] for char in prefix))
                 active = [[page.page_number, 0, max(0, line["top"] - 3), page.width - 1, end]]
+                # A hanging indent comes from the source answer label. Crop
+                # the first line and the continuation independently when there
+                # is clear space between them, then align both on the left.
+                if len(characters) > prefix_length and index + 1 < next_index:
+                    next_line = lines[index + 1]
+                    cut = (line["bottom"] + next_line["top"]) / 2
+                    start = min(char["x0"] for char in characters[prefix_length:]) - 2
+                    graphics = (*page.images, *page.edges, *page.curves)
+                    if (start > mask[2] and line["bottom"] + 1 < next_line["top"]
+                            and not any(obj["top"] < cut < obj["bottom"] for obj in graphics)
+                            and not any(mask[2] < obj["x0"] < start
+                                        and obj["top"] < cut and obj["bottom"] > active[0][2]
+                                        for obj in graphics)):
+                        active[:] = [
+                            [page.page_number, start, active[0][2], page.width - 1, cut],
+                            [page.page_number, 0, cut, page.width - 1, end],
+                        ]
+                        mask = None
                 entries[number] = (_choice_number(marker[2]), active, mask)
     if not started:
         return None

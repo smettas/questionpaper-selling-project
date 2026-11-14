@@ -10,7 +10,7 @@ from .pdf_import import render_crop
 def aligned_artwork(document, text_page, box, mask):
     page, left, top, right, bottom = box
     words = text_page.crop((left, top, right, bottom)).extract_words()
-    markers = [word for word in words if re.fullmatch(r"\([1-4]\)", word["text"])]
+    markers = [word for word in words if re.match(r"^\([1-4]\)", word["text"])]
     markers.sort(key=lambda word: word["top"])
     if len(markers) != 4:
         return None
@@ -19,11 +19,9 @@ def aligned_artwork(document, text_page, box, mask):
         if not rows or abs(rows[-1][0]["top"] - marker["top"]) > 4:
             rows.append([])
         rows[-1].append(marker)
-    if not rows or len({len(row) for row in rows}) != 1:
-        return None
     for row in rows:
         row.sort(key=lambda word: word["x0"])
-    if [word["text"] for row in rows for word in row] != ["(1)", "(2)", "(3)", "(4)"]:
+    if [word["text"][:3] for row in rows for word in row] != ["(1)", "(2)", "(3)", "(4)"]:
         return None
     first_top = min(word["top"] for word in rows[0])
     if first_top - top < 8:
@@ -31,21 +29,19 @@ def aligned_artwork(document, text_page, box, mask):
     # Use the whitespace between rows and between option columns. If a
     # boundary intersects text, keep the source artwork for that question.
     horizontal = [min(word["top"] for word in row) - 3 for row in rows] + [bottom]
-    vertical = [left] + [min(row[i]["x0"] for row in rows) - 3
-                          for i in range(1, len(rows[0]))] + [right]
     artwork = [*words, *text_page.images, *text_page.edges, *text_page.curves]
     artwork = [obj for obj in artwork if obj["x1"] > left and obj["x0"] < right
                and obj["bottom"] > top and obj["top"] < bottom]
-    for cut in horizontal[:-1]:
-        if any(word["top"] < cut < word["bottom"] for word in artwork):
-            return None
-    for cut in vertical[1:-1]:
-        if any(word["bottom"] > horizontal[0] and word["x0"] < cut < word["x1"] for word in artwork):
-            return None
+    if any(obj["top"] < cut < obj["bottom"] for cut in horizontal[:-1] for obj in artwork):
+        return None
 
     crops = [[page, left, top, right, horizontal[0]]]
-    for y0, y1 in zip(horizontal, horizontal[1:]):
-        crops.extend([page, x0, y0, x1, y1] for x0, x1 in zip(vertical, vertical[1:]))
+    for row, y0, y1 in zip(rows, horizontal, horizontal[1:]):
+        cuts = [left, *(marker["x0"] - 1 for marker in row[1:]), right]
+        if any(obj["x0"] < cut < obj["x1"] and obj["top"] < y1 and obj["bottom"] > y0
+               for cut in cuts[1:-1] for obj in artwork):
+            return None
+        crops.extend([page, x0, y0, x1, y1] for x0, x1 in zip(cuts, cuts[1:]))
 
     parts = []
     for index, crop in enumerate(crops):
