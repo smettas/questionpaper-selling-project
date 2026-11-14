@@ -65,7 +65,7 @@ function refreshSelection() {
   }
   for (const button of results.querySelectorAll('[data-question-id]')) {
     const added = selected.has(Number(button.dataset.questionId));
-    button.textContent = added ? 'Remove question' : 'Add question';
+    button.textContent = added ? '✓ Added · Remove' : '+ Add question';
     button.setAttribute('aria-pressed', String(added));
     button.disabled = !added && selected.size >= 300;
   }
@@ -85,15 +85,7 @@ function toggle(question) {
   refreshSelection();
 }
 
-function previewImage(url, alt, structured) {
-  if (structured) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = `Open ${alt} (PDF)`;
-    return link;
-  }
+function previewImage(url, alt) {
   const image = document.createElement('img');
   image.src = url;
   image.alt = alt;
@@ -101,26 +93,77 @@ function previewImage(url, alt, structured) {
   return image;
 }
 
+function formattedText(tokens) {
+  const block = document.createElement('div');
+  block.className = 'formatted-text';
+  for (const [kind, value, alt] of tokens) {
+    if (kind === 'math') {
+      const image = previewImage(`data:image/svg+xml;base64,${value}`, alt);
+      image.className = 'inline-math';
+      block.append(image);
+    } else if (kind === 'sub' || kind === 'sup') {
+      const span = document.createElement(kind);
+      span.textContent = value;
+      block.append(span);
+    } else {
+      block.append(value);
+    }
+  }
+  return block;
+}
+
+function appendDiagrams(target, preview, placement) {
+  for (const diagram of preview.diagrams) {
+    if (diagram.placement === placement) {
+      target.append(previewImage(`data:image/png;base64,${diagram.png}`, 'Diagram'));
+    }
+  }
+}
+
 function showQuestions(questions) {
   results.replaceChildren();
   for (const question of questions) {
     const card = document.createElement('article');
     card.className = 'question-preview';
+    const header = document.createElement('div');
+    header.className = 'question-heading';
     const caption = document.createElement('h3');
-    caption.textContent = `Bank #${question.id}`;
-    const solution = document.createElement('details');
-    const title = document.createElement('summary');
-    title.textContent = 'View answer and solution';
-    const answer = document.createElement('p');
-    answer.textContent = `Correct option: (${question.answer})`;
-    solution.append(title, answer, question.hint
-      ? previewImage(question.hint, `Worked solution for question ${question.id}`, question.structured) : 'No worked solution was uploaded.');
+    caption.textContent = `Question #${question.id}`;
     const add = document.createElement('button');
     add.type = 'button';
-    add.className = 'secondary';
+    add.className = 'secondary pick-button';
     add.dataset.questionId = question.id;
     add.onclick = () => toggle(question);
-    card.append(caption, previewImage(question.image, `Question ${question.id}`, question.structured), solution, add);
+    add.setAttribute('aria-label', `Toggle question #${question.id}`);
+    header.append(caption, add);
+    card.append(header);
+    const preview = question.preview;
+    if (preview) {
+      card.append(formattedText(preview.stem));
+      appendDiagrams(card, preview, 'question');
+      const options = document.createElement('ol');
+      options.className = 'preview-options';
+      for (const [index, tokens] of preview.options.entries()) {
+        const option = document.createElement('li');
+        option.append(`(${index + 1})`, formattedText(tokens));
+        options.append(option);
+      }
+      card.append(options);
+    } else {
+      card.append(previewImage(question.image, `Question ${question.id}`));
+    }
+    const solution = document.createElement('section');
+    solution.className = 'solution-preview';
+    const answer = document.createElement('h4');
+    answer.textContent = `Correct option (${question.answer})`;
+    solution.append(answer);
+    if (preview) {
+      solution.append(formattedText(preview.hint));
+      appendDiagrams(solution, preview, 'hint');
+    } else {
+      solution.append(question.hint ? previewImage(question.hint, 'Worked solution') : 'No worked solution was uploaded.');
+    }
+    card.append(solution);
     results.append(card);
   }
   refreshSelection();

@@ -13,6 +13,7 @@ from PIL import Image
 from question_bank.models import Chapter, Question, Subtopic
 
 from .pdf import build_pdf
+from .structured import MATH, SCRIPT, equation_svg
 from .word import build_word
 
 
@@ -39,6 +40,34 @@ def builder(request):
     })
 
 
+def preview_tokens(value):
+    tokens = []
+    for part in MATH.split(value):
+        if MATH.fullmatch(part):
+            tokens.append(["math", b64encode(equation_svg(part[2:-2])).decode("ascii"), part[2:-2]])
+            continue
+        for chunk in SCRIPT.split(part):
+            for tag in ("sub", "sup"):
+                if chunk.startswith(f"<{tag}>") and chunk.endswith(f"</{tag}>"):
+                    tokens.append([tag, chunk[len(tag) + 2:-len(tag) - 3]])
+                    break
+            else:
+                if chunk:
+                    tokens.append(["text", chunk])
+    return tokens
+
+
+def inline_preview(content):
+    if not content:
+        return None
+    return {
+        "stem": preview_tokens(content["stem"]),
+        "options": [preview_tokens(option) for option in content["options"]],
+        "hint": preview_tokens(content["hint"]),
+        "diagrams": content["diagrams"],
+    }
+
+
 @require_GET
 def browse_questions(request):
     subjects = dict(Chapter.Subject.choices)
@@ -61,7 +90,7 @@ def browse_questions(request):
         "count": paginator.count, "page": page.number, "pages": paginator.num_pages,
         "questions": [{
             "id": row.pk, "subject": subjects[subject], "answer": row.correct_option,
-            "structured": bool(row.structured),
+            "preview": inline_preview(row.structured),
             "image": reverse("question-asset", args=[row.pk, "question"]),
             "hint": reverse("question-asset", args=[row.pk, "hint"]) if row.hint or row.structured else None,
         } for row in page],
