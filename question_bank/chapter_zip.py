@@ -71,7 +71,7 @@ def read_chapter_zip(path):
                     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
                     paragraphs = ["".join(node.text or "" for node in p.findall(".//w:t", ns)).strip()
                                   for p in root.findall(".//w:p", ns)]
-                    pattern = r"^(\d+)\.\s*Ans\s*\(([1-4])\)" if field == "answers_docx" else r"^(\d+)\."
+                    pattern = r"^(\d+)\.\s*Ans\s*\(([1-4])\)" if field == "answers_docx" else r"^(\d+)\.(?=\s|$)"
                     matches = [match for para in paragraphs if (match := re.match(pattern, para, re.I))]
                     if [int(match[1]) for match in matches] != list(range(1, count + 1)):
                         raise ValueError(f"Word numbering does not match manifest: {part[field]}")

@@ -42,6 +42,8 @@ def browse_questions(request):
     if subject not in subjects or difficulty not in ("", *Question.Difficulty.values):
         return JsonResponse({"error": "Choose a subject and difficulty."}, status=400)
     query = Question.objects.filter(active=True, subtopic__chapter__subject=subject)
+    if difficulty:
+        query = query.filter(difficulty=difficulty)
     for key, field in (("chapter", "subtopic__chapter_id"), ("topic", "subtopic_id")):
         value = request.GET.get(key)
         if value:
