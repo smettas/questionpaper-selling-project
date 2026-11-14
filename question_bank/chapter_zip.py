@@ -2,6 +2,7 @@
 import json
 import re
 from base64 import b64encode
+from hashlib import sha256
 from io import BytesIO
 from pathlib import PurePosixPath
 from xml.etree import ElementTree
@@ -98,15 +99,11 @@ def read_chapter_zip(path):
                 options = [text(option, 2000) for option in options]
                 if len({" ".join(option.split()).casefold() for option in options}) != 4:
                     raise ValueError(f"Repeated option: {uid}")
-                fingerprint = (" ".join(stem.split()).casefold(),
-                               tuple(sorted(" ".join(option.split()).casefold() for option in options)))
-                if fingerprint in fingerprints:
-                    raise ValueError(f"Repeated question: {uid}")
-                fingerprints.add(fingerprint)
                 assets = entry["assets"]
                 if not isinstance(assets, list) or len(assets) > 4:
                     raise ValueError(f"Too many assets: {uid}")
                 diagrams = []
+                question_images = []
                 for asset in assets:
                     if asset["placement"] not in ("question", "hint"):
                         raise ValueError(f"Invalid diagram placement: {uid}")
@@ -114,8 +111,18 @@ def read_chapter_zip(path):
                     with Image.open(BytesIO(raw)) as image:
                         if image.format != "PNG" or max(image.size) > 3000:
                             raise ValueError(f"Invalid diagram: {uid}")
-                        image.verify()
+                        if asset["placement"] == "question":
+                            pixels = image.convert("RGBA")
+                            question_images.append((pixels.size, sha256(pixels.tobytes()).hexdigest()))
+                        else:
+                            image.verify()
                     diagrams.append({"placement": asset["placement"], "png": b64encode(raw).decode("ascii")})
+                fingerprint = (" ".join(stem.split()).casefold(),
+                               tuple(sorted(" ".join(option.split()).casefold() for option in options)),
+                               tuple(question_images))
+                if fingerprint in fingerprints:
+                    raise ValueError(f"Repeated question: {uid}")
+                fingerprints.add(fingerprint)
                 records.append((uid, topic, difficulty, answer,
                                 {"stem": stem, "options": options, "hint": hint, "diagrams": diagrams}))
         if len(records) > 20000:
