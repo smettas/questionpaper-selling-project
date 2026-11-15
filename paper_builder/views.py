@@ -4,9 +4,11 @@ from io import BytesIO
 
 from django import forms
 from django.core.paginator import Paginator
+from django.db.models import Exists, OuterRef
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST
 from PIL import Image
 
@@ -31,10 +33,16 @@ class PaperDetails(forms.Form):
     duration = forms.IntegerField(min_value=1, max_value=1440, required=False)
 
 
+@never_cache
 @require_GET
 def builder(request):
-    chapters = list(Chapter.objects.values("id", "subject", "level", "name"))
-    topics = list(Subtopic.objects.values("id", "chapter_id", "name"))
+    published = Question.objects.filter(active=True)
+    chapters = list(Chapter.objects.filter(
+        Exists(published.filter(subtopic__chapter_id=OuterRef("pk")))
+    ).values("id", "subject", "level", "name"))
+    topics = list(Subtopic.objects.filter(
+        Exists(published.filter(subtopic_id=OuterRef("pk")))
+    ).values("id", "chapter_id", "name"))
     return render(request, "paper_builder/index.html", {
         "catalog": {"chapters": chapters, "topics": topics},
     })
