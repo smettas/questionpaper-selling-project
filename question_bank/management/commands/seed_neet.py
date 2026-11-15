@@ -43,7 +43,7 @@ Some Basic Concepts of Chemistry|Mole concept;Stoichiometry;Concentration
 Structure of Atom|Atomic models;Quantum numbers;Electronic configuration
 Classification of Elements and Periodicity|Periodic trends;Electronic configuration
 Chemical Bonding and Molecular Structure|Lewis structures;Hybridisation;Molecular orbital theory
-Chemical Thermodynamics|Enthalpy;Entropy;Gibbs energy
+Thermodynamics|Enthalpy;Entropy;Gibbs energy
 Equilibrium|Chemical equilibrium;Acids and bases;Solubility equilibria
 Redox Reactions|Oxidation numbers;Balancing;Disproportionation
 Organic Chemistry: Basic Principles and Techniques|Nomenclature;Isomerism;Electronic effects;Purification
