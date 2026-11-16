@@ -109,7 +109,7 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
                         entry.append(artwork_image(question.hint, width if preview else width - gutter))
                     if not preview:
                         entry = [Indenter(left=gutter), QuestionNumber(number, gutter), *entry, Indenter(left=-gutter)]
-                    flow.append(KeepTogether(([heading] if index == 0 else []) + entry))
+                    flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 9)]))
                 continue
             if answer_key:
                 answers = []
