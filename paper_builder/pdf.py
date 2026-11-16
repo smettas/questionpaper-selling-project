@@ -7,10 +7,10 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Image as PDFImage
-from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, KeepTogether, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, Flowable, Indenter, KeepTogether, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
-from .structured import question_blocks
+from .structured import body_style, question_blocks
 
 
 def artwork_image(field, max_width):
@@ -25,6 +25,21 @@ def artwork_image(field, max_width):
     return picture
 
 
+class QuestionNumber(Flowable):
+    """Draw the number in the margin on the first text baseline."""
+    _ZEROSIZE = True
+    keepWithNext = True
+
+    def __init__(self, number, gutter):
+        super().__init__()
+        self.number = number
+        self.gutter = gutter
+
+    def draw(self):
+        self.canv.setFont(body_style().fontName, body_style().fontSize)
+        self.canv.drawString(-self.gutter, -body_style().fontSize, f"{self.number}.")
+
+
 def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
     output = BytesIO()
     two = details.get("page_columns") == "two"
@@ -37,6 +52,8 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
     subtitle = ParagraphStyle("Subtitle", parent=title, fontSize=12, leading=15)
     label = ParagraphStyle("Label", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=navy)
     right_label = ParagraphStyle("RightLabel", parent=label, alignment=TA_RIGHT)
+    subject_label = ParagraphStyle("Subject", parent=label, alignment=TA_CENTER)
+    gutter = 32
     flow = []
     width = document.width - 12
     branding = []
@@ -81,15 +98,17 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
         answer_key = is_answer
         number = details["start_number"] - 1
         for subject, questions in sections:
-            heading = Paragraph(subject.upper(), label)
+            heading = Paragraph(subject.upper(), subject_label)
             if answer_key and any(question.hint or question.structured for question in questions):
                 for index, question in enumerate(questions):
                     number += 1
-                    entry = [Paragraph(f"({question.correct_option})" if preview else f"{number}.  ({question.correct_option})", label)]
+                    entry = [Paragraph(f"({question.correct_option})", label)]
                     if question.structured:
-                        entry.extend(question_blocks(question.structured, width, answer_key=True))
+                        entry.extend(question_blocks(question.structured, width if preview else width - gutter, answer_key=True))
                     elif question.hint:
-                        entry.append(artwork_image(question.hint, width))
+                        entry.append(artwork_image(question.hint, width if preview else width - gutter))
+                    if not preview:
+                        entry = [Indenter(left=gutter), QuestionNumber(number, gutter), *entry, Indenter(left=-gutter)]
                     flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 9)]))
                 continue
             if answer_key:
@@ -110,25 +129,20 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
                 continue
             for index, question in enumerate(questions):
                 number += 1
+                content_width = width if preview else width - gutter
                 if question.structured:
-                    entry = question_blocks(question.structured, width, prefix="" if preview else f"{number}. ",
+                    entry = question_blocks(question.structured, content_width,
                                             option_layout=details.get("option_layout") or "one")
-                    if mode == "paired":
-                        entry.append(Paragraph(f"Answer: ({question.correct_option})", label))
-                        entry.extend(question_blocks(question.structured, width, answer_key=True))
-                    flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 8)]))
-                    continue
-                picture = artwork_image(question.artwork, width - 52)
-                table = Table([[Paragraph(f"{number}.", label), picture]], colWidths=[40, width - 40])
-                table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
-                                           ("ALIGN", (1, 0), (1, 0), "LEFT"),
-                                           ("TOPPADDING", (0, 0), (-1, -1), 0),
-                                           ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-                entry = [table]
+                else:
+                    entry = [artwork_image(question.artwork, content_width)]
                 if mode == "paired":
                     entry.append(Paragraph(f"Answer: ({question.correct_option})", label))
-                    if question.hint:
-                        entry.append(artwork_image(question.hint, width))
+                    if question.structured:
+                        entry.extend(question_blocks(question.structured, content_width, answer_key=True))
+                    elif question.hint:
+                        entry.append(artwork_image(question.hint, content_width))
+                if not preview:
+                    entry = [Indenter(left=gutter), QuestionNumber(number, gutter), *entry, Indenter(left=-gutter)]
                 flow.append(KeepTogether(([heading] if index == 0 else []) + entry + [Spacer(1, 8)]))
 
     def footer(canvas, doc):

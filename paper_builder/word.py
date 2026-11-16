@@ -104,9 +104,26 @@ def build_word(details, sections, mode):
         cols.set(qn("w:num"), "2")
         cols.set(qn("w:space"), "360")
 
+    gutter = 32
+    width -= gutter
+
+    def body_paragraph(number=None):
+        paragraph = doc.add_paragraph()
+        fmt = paragraph.paragraph_format
+        fmt.left_indent = Pt(gutter)
+        if number is not None:
+            fmt.first_line_indent = Pt(-gutter)
+            fmt.tab_stops.add_tab_stop(Pt(gutter))
+            paragraph.add_run(f"{number}.\t")
+        return paragraph
+
     def make_table(rows, columns):
         table = doc.add_table(rows=rows, cols=columns)
         table.autofit = False
+        indent = OxmlElement("w:tblInd")
+        indent.set(qn("w:w"), str(gutter * 20))
+        indent.set(qn("w:type"), "dxa")
+        table._tbl.tblPr.insert_element_before(indent, "w:tblLayout", "w:tblLook")
         for column in table.columns:
             column.width = Pt(width / columns)
         return table
@@ -118,23 +135,24 @@ def build_word(details, sections, mode):
 
     def content(question, answer, number):
         data = question.structured
-        prefix = f"{number}. ({question.correct_option}) " if answer else f"{number}. "
+        prefix = f"({question.correct_option}) " if answer else ""
         if not data:
-            paragraph = doc.add_paragraph(prefix)
+            paragraph = body_paragraph(number)
+            paragraph.add_run(prefix)
             field = question.hint if answer else question.artwork
             if field:
                 paragraph.paragraph_format.keep_with_next = True
                 with field.open("rb") as asset:
-                    add_picture(doc.add_paragraph(), asset.read(), width - 10)
+                    add_picture(body_paragraph(), asset.read(), width - 10)
             return
         start = len(doc.paragraphs)
-        for part in content_rows(data["hint" if answer else "stem"]):
+        for index, part in enumerate(content_rows(data["hint" if answer else "stem"])):
             if isinstance(part, str):
-                paragraph = doc.add_paragraph()
+                paragraph = body_paragraph(number if index == 0 else None)
                 write_text(paragraph, prefix + part)
             else:
-                if prefix:
-                    doc.add_paragraph(prefix)
+                if index == 0:
+                    body_paragraph(number).add_run(prefix)
                 table = make_table(0, len(part[0]))
                 table.style = "Table Grid"
                 for row in part:
@@ -146,13 +164,13 @@ def build_word(details, sections, mode):
             prefix = ""
         for asset in data["diagrams"]:
             if asset["placement"] == ("hint" if answer else "question"):
-                add_picture(doc.add_paragraph(), b64decode(asset["png"]), width - 10)
+                add_picture(body_paragraph(), b64decode(asset["png"]), width - 10)
         if not answer:
             columns = option_columns(data["options"], details.get("option_layout") or "one", width - 12)
             options = [f"({i}) {value}" for i, value in enumerate(data["options"], 1)]
             if columns == 1:
                 for value in options:
-                    write_text(doc.add_paragraph(), value)
+                    write_text(body_paragraph(), value)
             else:
                 table = make_table(4 // columns, columns)
                 for row in table.rows:
@@ -172,7 +190,8 @@ def build_word(details, sections, mode):
             doc.add_heading("Answer Key", level=1)
         number = details["start_number"]
         for subject, questions in sections:
-            doc.add_heading(subject.upper(), level=2)
+            heading = doc.add_heading(subject.upper(), level=2)
+            heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for question in questions:
                 content(question, answer, number)
                 if mode == "paired":
