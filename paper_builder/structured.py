@@ -17,6 +17,17 @@ from svglib.svglib import svg2rlg
 
 MATH = re.compile(r"(\\\(.*?\\\)|\\\[.*?\\\])", re.S)
 SCRIPT = re.compile(r"(<(?:sub|sup)>[^<>]+</(?:sub|sup)>)")
+QUESTION_LABEL = re.compile(
+    r"^\s*(?:(?:Assertion|Reason)(?:\s*\([AR]\))?\s*[:–—-]"
+    r"|Statement\s*[-–—]?\s*(?:[IVX]+|\d+|[A-Z])\s*[:.)–—-]"
+    r"|(?:List|Match)\s*[-–—]?\s*(?:[IVX]+|\d+)(?=\W|$)\s*:?)",
+    re.IGNORECASE,
+)
+
+
+def split_question_label(value):
+    match = QUESTION_LABEL.match(value)
+    return (match[0].rstrip(), value[len(match[0].rstrip()):]) if match else ("", value)
 
 
 @lru_cache(maxsize=256)
@@ -42,15 +53,21 @@ def validate_content(content):
 def body_style():
     font = Path(get_data_path()) / "fonts" / "ttf" / "DejaVuSerif.ttf"
     pdfmetrics.registerFont(TTFont("PaperSerif", str(font)))
+    pdfmetrics.registerFont(TTFont("PaperSerif-Bold", str(font.with_name("DejaVuSerif-Bold.ttf"))))
+    pdfmetrics.registerFontFamily("PaperSerif", normal="PaperSerif", bold="PaperSerif-Bold")
     return ParagraphStyle("StructuredBody", fontName="PaperSerif", fontSize=10, leading=15,
                           spaceAfter=4)
 
 
-def text_blocks(text, width, prefix=""):
+def text_blocks(text, width, prefix="", *, bold_labels=False):
     blocks = []
     for line in text.splitlines():
         buffer = prefix
         prefix = ""
+        if bold_labels:
+            label, line = split_question_label(line)
+            if label:
+                buffer += f"<b>{escape(label)}</b>"
         parts = MATH.split(line)
         for index, part in enumerate(parts):
             if not part:
@@ -93,10 +110,11 @@ def question_blocks(content, width, *, answer_key=False, prefix="", option_layou
     blocks = []
     for part in content_rows(content["hint" if answer_key else "stem"]):
         if isinstance(part, str):
-            blocks.extend(text_blocks(part, width, prefix))
+            blocks.extend(text_blocks(part, width, prefix, bold_labels=not answer_key))
         else:
             cell_width = width / len(part[0])
-            blocks.append(Table([[text_blocks(cell, cell_width - 12) for cell in row] for row in part],
+            blocks.append(Table([[text_blocks(cell, cell_width - 12, bold_labels=not answer_key)
+                                  for cell in row] for row in part],
                                 colWidths=[cell_width] * len(part[0]), repeatRows=1, hAlign="LEFT",
                                 style=[("GRID", (0, 0), (-1, -1), .4, colors.HexColor("#9aa8ba")),
                                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#edf2f8")),

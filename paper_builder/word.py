@@ -13,7 +13,7 @@ from latex2mathml.converter import convert
 from PIL import Image
 
 from .layout import content_rows, option_columns
-from .structured import MATH, SCRIPT
+from .structured import MATH, SCRIPT, split_question_label
 
 
 def append_math(paragraph, expression):
@@ -56,7 +56,11 @@ def append_math(paragraph, expression):
     paragraph._p.append(node("oMath", translate(ET.fromstring(convert(expression)))))
 
 
-def write_text(paragraph, value):
+def write_text(paragraph, value, *, bold_labels=False):
+    if bold_labels:
+        label, value = split_question_label(value)
+        if label:
+            paragraph.add_run(label).bold = True
     for part in MATH.split(value):
         if MATH.fullmatch(part):
             append_math(paragraph, part[2:-2])
@@ -149,7 +153,7 @@ def build_word(details, sections, mode):
         for index, part in enumerate(content_rows(data["hint" if answer else "stem"])):
             if isinstance(part, str):
                 paragraph = body_paragraph(number if index == 0 else None)
-                write_text(paragraph, prefix + part)
+                write_text(paragraph, prefix + part, bold_labels=not answer)
             else:
                 if index == 0:
                     body_paragraph(number).add_run(prefix)
@@ -160,7 +164,7 @@ def build_word(details, sections, mode):
                     size_row(table_row)
                     cells = table_row.cells
                     for cell, value in zip(cells, row):
-                        write_text(cell.paragraphs[0], value)
+                        write_text(cell.paragraphs[0], value, bold_labels=not answer)
             prefix = ""
         for asset in data["diagrams"]:
             if asset["placement"] == ("hint" if answer else "question"):
