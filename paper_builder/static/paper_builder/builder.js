@@ -137,6 +137,30 @@ function formattedText(tokens) {
   return block;
 }
 
+function appendStem(target, blocks) {
+  for (const block of blocks) {
+    if (block.text) {
+      target.append(formattedText(block.text));
+      continue;
+    }
+    const table = document.createElement('table');
+    table.className = 'preview-table';
+    const header = table.createTHead().insertRow();
+    const body = table.createTBody();
+    for (const tokens of block.rows[0]) {
+      const cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.append(formattedText(tokens));
+      header.append(cell);
+    }
+    for (const tokensRow of block.rows.slice(1)) {
+      const row = body.insertRow();
+      for (const tokens of tokensRow) row.insertCell().append(formattedText(tokens));
+    }
+    target.append(table);
+  }
+}
+
 function appendDiagrams(target, preview, placement) {
   for (const diagram of preview.diagrams) {
     if (diagram.placement === placement) {
@@ -164,7 +188,7 @@ function showQuestions(questions) {
     card.append(header);
     const preview = question.preview;
     if (preview) {
-      card.append(formattedText(preview.stem));
+      appendStem(card, preview.stem);
       appendDiagrams(card, preview, 'question');
       const options = document.createElement('ol');
       options.className = 'preview-options';

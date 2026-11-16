@@ -16,6 +16,7 @@ from PIL import Image
 from question_bank.models import Chapter, Question, Subtopic
 
 from .pdf import build_pdf
+from .layout import content_rows
 from .structured import MATH, SCRIPT, equation_svg
 from .word import build_word
 
@@ -50,6 +51,7 @@ def builder(request):
 
 
 def preview_tokens(value):
+    value = value.replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)")
     tokens = []
     for part in MATH.split(value):
         if MATH.fullmatch(part):
@@ -70,7 +72,11 @@ def inline_preview(content):
     if not content:
         return None
     return {
-        "stem": preview_tokens(content["stem"]),
+        "stem": [
+            {"text": preview_tokens(part)} if isinstance(part, str)
+            else {"rows": [[preview_tokens(cell) for cell in row] for row in part]}
+            for part in content_rows(content["stem"])
+        ],
         "options": [preview_tokens(option) for option in content["options"]],
         "hint": preview_tokens(content["hint"]),
         "diagrams": content["diagrams"],
