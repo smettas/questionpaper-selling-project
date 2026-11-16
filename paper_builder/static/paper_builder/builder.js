@@ -9,6 +9,13 @@ const available = document.querySelector('#available');
 const results = document.querySelector('#question-results');
 const selectedList = document.querySelector('#selected');
 const selected = new Map();
+const subjectOrder = ['Physics', 'Chemistry', 'Biology'];
+const exportSubject = form.elements.export_subject;
+let shuffle = '';
+
+function exportQuestions() {
+  return Array.from(selected.values()).filter(question => !exportSubject.value || question.subject === exportSubject.value);
+}
 const status = document.querySelector('#status');
 const submit = form.querySelector('[type="submit"]');
 const downloads = document.querySelector('#downloads');
@@ -52,17 +59,34 @@ function clearDownloads() {
 
 function refreshSelection() {
   selectedList.replaceChildren();
-  for (const question of selected.values()) {
-    const item = document.createElement('li');
-    item.append(`${question.subject} · Bank #${question.id} `);
-    const remove = document.createElement('button');
-    remove.type = 'button';
-    remove.className = 'remove';
-    remove.textContent = 'Remove';
-    remove.onclick = () => toggle(question);
-    item.append(remove);
-    selectedList.append(item);
+  const groups = new Map(subjectOrder.map(name => [name, []]));
+  for (const question of selected.values()) groups.get(question.subject).push(question);
+  for (const [name, questions] of groups) {
+    const section = document.createElement('section');
+    const heading = document.createElement('h4');
+    heading.textContent = `${name} · ${questions.length} selected`;
+    section.append(heading);
+    if (questions.length) {
+      const list = document.createElement('ul');
+      for (const question of questions) {
+        const item = document.createElement('li');
+        item.append(`Bank #${question.id} `);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove';
+        remove.textContent = 'Remove';
+        remove.onclick = () => toggle(question);
+        item.append(remove);
+        list.append(item);
+      }
+      section.append(list);
+    }
+    selectedList.append(section);
   }
+  for (const option of exportSubject.options) {
+    if (option.value) option.disabled = !groups.get(option.value).length;
+  }
+  if (exportSubject.selectedOptions[0]?.disabled) exportSubject.value = '';
   for (const button of results.querySelectorAll('[data-question-id]')) {
     const added = selected.has(Number(button.dataset.questionId));
     button.textContent = added ? '✓ Added · Remove' : '+ Add question';
@@ -70,11 +94,12 @@ function refreshSelection() {
     button.disabled = !added && selected.size >= 300;
   }
   const start = Number(form.elements.start_number.value);
-  const end = start + selected.size - 1;
+  const exportCount = exportQuestions().length;
+  const end = start + exportCount - 1;
   document.querySelector('#total').textContent = `${selected.size} questions selected`;
-  document.querySelector('#number-range').textContent = start > 0 && selected.size
+  document.querySelector('#number-range').textContent = start > 0 && exportCount
     ? `Paper and answer key numbering: ${start}–${end}` : '';
-  form.elements.end_number.setCustomValidity(selected.size && form.elements.end_number.value &&
+  form.elements.end_number.setCustomValidity(exportCount && form.elements.end_number.value &&
     Number(form.elements.end_number.value) !== end ? `Enter ${end} or leave the end number blank.` : '');
 }
 
@@ -169,7 +194,12 @@ function showQuestions(questions) {
   refreshSelection();
 }
 
-async function loadQuestions(target = 1) {
+function reshuffleQuestions() {
+  shuffle = Array.from(crypto.getRandomValues(new Uint32Array(2)), value => value.toString(16).padStart(8, '0')).join('');
+  loadQuestions(1);
+}
+
+async function loadQuestions(target) {
   pending?.abort();
   const controller = new AbortController();
   pending = controller;
@@ -177,7 +207,7 @@ async function loadQuestions(target = 1) {
   results.replaceChildren();
   document.querySelector('#pagination').hidden = true;
   const params = new URLSearchParams({
-    subject: subject.value, chapter: chapter.value, topic: topic.value, difficulty: difficulty.value, page: target,
+    subject: subject.value, chapter: chapter.value, topic: topic.value, difficulty: difficulty.value, page: target, shuffle,
   });
   try {
     const response = await fetch(`${filters.dataset.url}?${params}`, {signal: controller.signal});
@@ -196,26 +226,31 @@ async function loadQuestions(target = 1) {
   }
 }
 
-subject.onchange = () => { updateChapters(); loadQuestions(); };
-chapter.onchange = () => { updateTopics(); loadQuestions(); };
-topic.onchange = difficulty.onchange = () => loadQuestions();
+subject.onchange = () => { updateChapters(); reshuffleQuestions(); };
+chapter.onchange = () => { updateTopics(); reshuffleQuestions(); };
+topic.onchange = difficulty.onchange = reshuffleQuestions;
+document.querySelector('#shuffle-questions').onclick = reshuffleQuestions;
 previous.onclick = () => loadQuestions(page - 1);
 next.onclick = () => loadQuestions(page + 1);
-form.addEventListener('input', () => { clearDownloads(); refreshSelection(); });
+form.addEventListener('input', event => {
+  clearDownloads();
+  if (!filters.contains(event.target)) refreshSelection();
+});
 updateChapters();
 refreshSelection();
-loadQuestions();
+reshuffleQuestions();
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
   clearDownloads();
-  if (!selected.size) {
+  const questions = exportQuestions();
+  if (!questions.length) {
     status.textContent = 'Add at least one question.';
     return;
   }
   const generation = revision;
   const data = new FormData(form);
-  data.set('question_ids', JSON.stringify(Array.from(selected.keys())));
+  data.set('question_ids', JSON.stringify(questions.map(question => question.id)));
   status.textContent = 'Generating your files…';
   submit.disabled = true;
   try {

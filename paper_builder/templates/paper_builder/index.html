@@ -23,6 +23,7 @@
 <label>Subtopic<select id="topic"></select></label>
 <label>Difficulty<select id="difficulty"><option value="">All difficulties</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
 </div>
+<button type="button" id="shuffle-questions">Shuffle questions</button>
 <p id="available" class="available" role="status"></p>
 <div id="question-results"></div>
 <nav id="pagination" class="section-footer" aria-label="Question pages" hidden>
@@ -48,9 +49,10 @@
 <label>Logo <span class="muted">(optional)</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
 <h3>Selected questions</h3>
 <p id="total" aria-live="polite"></p>
-<ol id="selected"></ol>
+<div id="selected"></div>
 <fieldset class="export-settings">
 <legend>Export settings</legend>
+<label>Subjects to export<select name="export_subject"><option value="">All selected subjects</option><option>Physics</option><option>Chemistry</option><option>Biology</option></select></label>
 <div class="grid">
 <label>Paper columns<select name="page_columns"><option value="one">One column</option><option value="two">Two columns</option></select></label>
 <label>Option layout<select name="option_layout"><option value="one">One per row</option><option value="two">Two per row if they fit</option><option value="four">Four per row if they fit</option></select></label>

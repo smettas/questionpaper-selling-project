@@ -4,7 +4,8 @@ from io import BytesIO
 
 from django import forms
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef
+from django.db.models import CharField, Exists, OuterRef, Value
+from django.db.models.functions import Cast, Concat, MD5
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -92,7 +93,14 @@ def browse_questions(request):
             if not value.isascii() or not value.isdecimal() or len(value) > 18:
                 return JsonResponse({"error": "Invalid filter."}, status=400)
             query = query.filter(**{field: int(value)})
-    paginator = Paginator(query.order_by("pk"), 12)
+    shuffle = request.GET.get("shuffle", "")
+    if shuffle:
+        if len(shuffle) > 32 or any(char not in "0123456789abcdef" for char in shuffle):
+            return JsonResponse({"error": "Invalid shuffle value."}, status=400)
+        query = query.order_by(MD5(Concat(Value(shuffle), Cast("pk", CharField()))), "pk")
+    else:
+        query = query.order_by("pk")
+    paginator = Paginator(query, 12)
     page = paginator.get_page(request.GET.get("page", 1))
     return JsonResponse({
         "count": paginator.count, "page": page.number, "pages": paginator.num_pages,
@@ -157,13 +165,12 @@ def download(request):
             raise ValueError("The last question number must be 9999 or lower.")
         if details["end_number"] is not None and details["end_number"] != last_number:
             raise ValueError(f"{total} questions starting at {details['start_number']} must end at {last_number}.")
-        selected = []
+        by_subject = {subject: [] for subject in Chapter.Subject.values}
         for pk in ids:
             question = rows[pk]
-            subject = question.subtopic.chapter.get_subject_display()
-            if not selected or selected[-1][0] != subject:
-                selected.append((subject, []))
-            selected[-1][1].append(question)
+            by_subject[question.subtopic.chapter.subject].append(question)
+        selected = [(label, by_subject[subject]) for subject, label in Chapter.Subject.choices
+                    if by_subject[subject]]
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")
 
