@@ -5,6 +5,7 @@ from io import BytesIO
 from xml.etree import ElementTree as ET
 
 from docx import Document
+from docx.enum.section import WD_SECTION_START
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -92,21 +93,43 @@ def build_word(details, sections, mode):
     width = (515 - 18) / 2 if details.get("page_columns") == "two" else 515
     if details["logo"]:
         add_picture(doc.add_paragraph(), details["logo"], 76)
-    for value in [details["institution"], "  ".join(filter(None, [
-            details["title"], f"({details['date']:%d-%m-%Y})" if details["date"] else ""])),
-            "    ".join(filter(None, [
-                f"Duration: {details['duration']} min" if details["duration"] else "",
-                f"Max. Marks: {details['marks']}" if details["marks"] else ""]))]:
-        if value:
+    title_and_date = "  ".join(filter(None, [
+        details["title"], f"({details['date']:%d-%m-%Y})" if details["date"] else "",
+    ]))
+    metadata = "    ".join(filter(None, [
+        f"Duration: {details['duration']} min" if details["duration"] else "",
+        f"Max. Marks: {details['marks']}" if details["marks"] else "",
+    ]))
+    two = details.get("page_columns") == "two"
+
+    def header(*values, answer=False):
+        paragraphs = []
+        for value in filter(None, values):
             paragraph = doc.add_paragraph()
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.add_run(value).bold = True
-    if details.get("page_columns") == "two":
-        from docx.enum.section import WD_SECTION_START
-        section = doc.add_section(WD_SECTION_START.CONTINUOUS)
-        cols = section._sectPr.find(qn("w:cols"))
-        cols.set(qn("w:num"), "2")
+            paragraphs.append(paragraph)
+        if answer:
+            heading = doc.add_heading("Answer Key", level=1)
+            heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraphs.append(heading)
+        if paragraphs:
+            borders = OxmlElement("w:pBdr")
+            bottom = OxmlElement("w:bottom")
+            for key, value in (("val", "double"), ("sz", "6"), ("space", "4")):
+                bottom.set(qn(f"w:{key}"), value)
+            borders.append(bottom)
+            paragraphs[-1]._p.get_or_add_pPr().insert_element_before(borders, "w:spacing", "w:jc")
+            paragraphs[-1].paragraph_format.space_after = Pt(12)
+
+    def column_section(start, count):
+        cols = doc.add_section(start)._sectPr.find(qn("w:cols"))
+        cols.set(qn("w:num"), str(count))
         cols.set(qn("w:space"), "360")
+
+    header(details["institution"], title_and_date, metadata, answer=mode == "answer")
+    if two:
+        column_section(WD_SECTION_START.CONTINUOUS, 2)
 
     gutter = 32
     width -= gutter
@@ -188,10 +211,14 @@ def build_word(details, sections, mode):
             doc.paragraphs[-1].paragraph_format.space_after = Pt(9)
 
     for answer in ([False, True] if mode == "combined" else [mode == "answer"]):
-        if answer:
-            if mode == "combined":
+        if answer and mode == "combined":
+            if two:
+                column_section(WD_SECTION_START.NEW_PAGE, 1)
+            else:
                 doc.add_page_break()
-            doc.add_heading("Answer Key", level=1)
+            header(title_and_date, answer=True)
+            if two:
+                column_section(WD_SECTION_START.CONTINUOUS, 2)
         number = details["start_number"]
         for subject, questions in sections:
             heading = doc.add_heading(subject.upper(), level=2)

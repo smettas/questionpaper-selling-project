@@ -7,7 +7,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Image as PDFImage
-from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, Flowable, Indenter, KeepTogether, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, Flowable, Indenter, KeepTogether, NextPageTemplate, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 from .structured import body_style, question_blocks
@@ -77,12 +77,18 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
         marks = f"Max. Marks: {details['marks']}" if details["marks"] else ""
         flow.append(Table([[Paragraph(duration, label), Paragraph(marks, right_label)]],
                           colWidths=[width / 2] * 2))
-    if flow:
-        flow.append(Table([[""]], colWidths=[width], rowHeights=[4], style=[
+    def double_rule():
+        return Table([[""]], colWidths=[header_width], rowHeights=[4], style=[
             ("LINEABOVE", (0, 0), (-1, -1), .8, colors.black),
             ("LINEBELOW", (0, 0), (-1, -1), .8, colors.black),
-        ]))
-        flow.append(Spacer(1, 12))
+        ])
+
+    header_width = width
+    standalone_answer = answer_key or mode == "answer"
+    if standalone_answer:
+        flow.append(Paragraph("Answer Key", subtitle))
+    if flow:
+        flow.extend([double_rule(), Spacer(1, 12)])
     header_height = 0
     if two and flow:
         header_height = sum(item.wrap(width, document.height)[1] for item in flow) + 24
@@ -90,11 +96,21 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
     if two:
         width = (document.width - 18) / 2 - 12
 
-    for is_answer in ([False, True] if mode == "combined" else [answer_key or mode == "answer"]):
-        if is_answer:
-            if mode == "combined":
-                flow.append(PageBreak())
-            flow.append(Paragraph("Answer Key", subtitle))
+    answer_header = []
+    answer_header_height = 0
+    if mode == "combined":
+        if subtitle_parts:
+            answer_header.append(Paragraph("  ".join(subtitle_parts), subtitle))
+        answer_header.extend([Paragraph("Answer Key", subtitle), double_rule(), Spacer(1, 12)])
+        answer_header_height = sum(item.wrap(header_width, document.height)[1] for item in answer_header) + 24
+
+    for is_answer in ([False, True] if mode == "combined" else [standalone_answer]):
+        if is_answer and mode == "combined":
+            if two:
+                flow.append(NextPageTemplate("AnswerStart"))
+            flow.extend([PageBreak(), *answer_header])
+            if two:
+                flow.append(FrameBreak)
         answer_key = is_answer
         number = details["start_number"] - 1
         for subject, questions in sections:
@@ -157,15 +173,21 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
             return [Frame(document.leftMargin + offset, document.bottomMargin, column_width, height)
                     for offset in (0, column_width + 18)]
 
-        first_frames = columns(document.height - header_height)
-        if header_height:
-            first_frames.insert(0, Frame(document.leftMargin,
-                                         document.bottomMargin + document.height - header_height,
-                                         document.width, header_height, topPadding=0, bottomPadding=0))
-        document.addPageTemplates([
-            PageTemplate("First", first_frames, onPage=footer, autoNextPageTemplate="Body"),
+        def opening_frames(height):
+            frames = columns(document.height - height)
+            if height:
+                frames.insert(0, Frame(document.leftMargin, document.bottomMargin + document.height - height,
+                                       document.width, height, topPadding=0, bottomPadding=0))
+            return frames
+
+        templates = [
+            PageTemplate("First", opening_frames(header_height), onPage=footer, autoNextPageTemplate="Body"),
             PageTemplate("Body", columns(document.height), onPage=footer),
-        ])
+        ]
+        if answer_header:
+            templates.append(PageTemplate("AnswerStart", opening_frames(answer_header_height),
+                                          onPage=footer, autoNextPageTemplate="Body"))
+        document.addPageTemplates(templates)
         document.build(flow)
     else:
         document.build(flow, onFirstPage=footer, onLaterPages=footer)
