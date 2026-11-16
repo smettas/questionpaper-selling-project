@@ -181,7 +181,7 @@ def build_word(details, sections, mode):
         for paragraph in doc.paragraphs[start:-1]:
             paragraph.paragraph_format.keep_with_next = True
         if len(doc.paragraphs) > start:
-            doc.paragraphs[-1].paragraph_format.space_after = Pt(9)
+            doc.paragraphs[-1].paragraph_format.space_after = Pt(0 if answer else 9)
 
     for answer in ([False, True] if mode == "combined" else [mode == "answer"]):
         if answer:
