@@ -27,7 +27,7 @@ button:enabled:active,.download:active{transform:translateY(0)}
 .pick-button{flex-shrink:0;background:#ede7ff;color:#49339a}
 .pick-button[aria-pressed="true"]{background:#e0f4ec;color:#165d48}
 .formatted-text{white-space:pre-wrap;line-height:1.65;min-width:0}
-.question-preview img.inline-math{display:inline-block;vertical-align:middle;max-height:2.5em;max-width:100%;margin:0 .2em}
+.question-preview img.inline-math{display:inline-block;vertical-align:-.16em;max-height:2.5em;max-width:100%;margin:0}
 .preview-options{list-style:none;display:grid;gap:.4rem;margin:.85rem 0;padding:0}
 .preview-options li{display:grid;grid-template-columns:2em 1fr;gap:.25em;padding:.3rem .55rem;background:#f7f8fd;border-radius:7px}
 .solution-preview{margin-top:.85rem;padding:.75rem .85rem;border-left:3px solid #29a98d;border-radius:10px;background:#edf9f5;color:#164a41}
@@ -43,7 +43,3 @@ button:enabled:active,.download:active{transform:translateY(0)}
 #selected h4{margin:0}
 #selected ul{margin:6px 0 0;padding-left:20px}
 #shuffle-questions{margin-top:10px}
-
-.preview-table{width:100%;border-collapse:collapse;margin:8px 0;table-layout:fixed}
-.preview-table th,.preview-table td{padding:6px 8px;text-align:left;vertical-align:top;border:1px solid #dce4ef;overflow-wrap:anywhere}
-.preview-table th{background:#f3f5fc}

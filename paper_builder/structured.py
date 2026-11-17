@@ -1,4 +1,4 @@
-"""Typeset structured question text, vector math and diagram assets."""
+"""Typeset structured question text, inline math and diagram assets."""
 import re
 from base64 import b64decode
 from functools import lru_cache
@@ -13,17 +13,17 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image, Paragraph, Table, Spacer
-from svglib.svglib import svg2rlg
+from reportlab.platypus.paraparser import ParaParser
+from PIL import Image as PILImage
 
 MATH = re.compile(r"(\\\(.*?\\\)|\\\[.*?\\\])", re.S)
 SCRIPT = re.compile(r"(<(?:sub|sup)>[^<>]+</(?:sub|sup)>)")
+
 
 def normalize_math(value):
     """Typeset known plain-text formulas from existing chapter banks."""
     return (value.replace("√(K<sub>b</sub>/C)", r"\(\sqrt{\frac{K_b}{C}}\)")
                  .replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)"))
-
-
 QUESTION_LABEL = re.compile(
     r"^\s*(?:(?:Assertion|Reason)(?:\s*\([AR]\))?\s*[:–—-]"
     r"|Statement\s*[-–—]?\s*(?:[IVX]+|\d+|[A-Z])\s*[:.)–—-]"
@@ -37,12 +37,26 @@ def split_question_label(value):
     return (match[0].rstrip(), value[len(match[0].rstrip()):]) if match else ("", value)
 
 
+def render_equation(expression, format, dpi=None):
+    output = BytesIO()
+    with rc_context({"svg.fonttype": "path", "savefig.transparent": True,
+                     "mathtext.fontset": "dejavuserif"}):
+        math_to_image(f"${expression}$", output, format=format, dpi=dpi)
+    return output.getvalue()
+
+
 @lru_cache(maxsize=256)
 def equation_svg(expression):
-    output = BytesIO()
-    with rc_context({"svg.fonttype": "path"}):
-        math_to_image(f"${expression}$", output, format="svg")
-    return output.getvalue()
+    return render_equation(expression, "svg")
+
+
+@lru_cache(maxsize=256)
+def equation_png(expression):
+    dpi = 288
+    payload = render_equation(expression, "png", dpi=dpi)
+    with PILImage.open(BytesIO(payload)) as image:
+        width, height = image.size
+    return payload, width * 72 / dpi, height * 72 / dpi
 
 
 def validate_content(content):
@@ -63,50 +77,51 @@ def body_style():
     pdfmetrics.registerFont(TTFont("PaperSerif-Bold", str(font.with_name("DejaVuSerif-Bold.ttf"))))
     pdfmetrics.registerFontFamily("PaperSerif", normal="PaperSerif", bold="PaperSerif-Bold")
     return ParagraphStyle("StructuredBody", fontName="PaperSerif", fontSize=10, leading=15,
-                          spaceAfter=4)
+                          spaceAfter=4, autoLeading="max")
+
+
+class EquationParagraphParser(ParaParser):
+    """Resolve equation images directly from memory during paragraph parsing."""
+
+    def __init__(self, images):
+        super().__init__()
+        self.images = images
+
+    def start_img(self, attributes):
+        super().start_img(attributes)
+        fragment = self._stack[-1]
+        fragment.src = BytesIO(self.images[int(fragment.src)])
 
 
 def text_blocks(text, width, prefix="", *, bold_labels=False):
     blocks = []
     for line in normalize_math(text).splitlines():
         buffer = prefix
+        images = []
         prefix = ""
         if bold_labels:
             label, line = split_question_label(line)
             if label:
                 buffer += f"<b>{escape(label)}</b>"
-        parts = MATH.split(line)
-        for index, part in enumerate(parts):
-            if not part:
-                continue
-            if not MATH.fullmatch(part):
-                buffer += "".join(chunk if re.fullmatch(r"<sub>[^<>]+</sub>|<sup>[^<>]+</sup>", chunk)
-                                  else escape(chunk) for chunk in SCRIPT.split(part))
-                continue
-            if buffer.strip():
-                blocks.append(Paragraph(buffer, body_style()))
-                buffer = ""
-            drawing = svg2rlg(BytesIO(equation_svg(part[2:-2])))
-            suffix = re.match(r"^\s*((?:mol|grams?|g|kg|L|mL|u|molecules?|atoms?)\b[.,;:]?|[.,;:])", parts[index + 1])
-            remainder = suffix[1] if suffix else ""
-            if suffix:
-                parts[index + 1] = parts[index + 1][suffix.end():].lstrip()
-            trailing_width = 45 if remainder else 0
-            scale = min(1.15, (width - trailing_width) / drawing.width)
-            drawing.scale(scale, scale)
-            drawing.width *= scale
-            drawing.height *= scale
-            drawing.hAlign = "LEFT"
-            if remainder:
-                blocks.append(Table([[drawing, Paragraph(escape(remainder), body_style())]],
-                                    colWidths=[drawing.width + 4, trailing_width], hAlign="LEFT",
-                                    style=[("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                           ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                                           ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+        for part in MATH.split(line):
+            if MATH.fullmatch(part):
+                image, natural_width, height = equation_png(part[2:-2])
+                scale = min(1, width / natural_width)
+                buffer += (f'<img src="{len(images)}" width="{natural_width * scale:.2f}" '
+                           f'height="{height * scale:.2f}" valign="middle"/>')
+                images.append(image)
             else:
-                blocks.append(drawing)
+                buffer += "".join(
+                    chunk if SCRIPT.fullmatch(chunk) else escape(chunk)
+                    for chunk in SCRIPT.split(part)
+                )
         if buffer.strip():
-            blocks.append(Paragraph(buffer, body_style()))
+            style = body_style()
+            if images:
+                _, fragments, _ = EquationParagraphParser(images).parse(buffer, style)
+                blocks.append(Paragraph(buffer, style, frags=fragments))
+            else:
+                blocks.append(Paragraph(buffer, style))
     return blocks
 
 

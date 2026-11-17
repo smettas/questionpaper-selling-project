@@ -3,20 +3,26 @@ import re
 
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
-from .structured import MATH, body_style
+from .structured import MATH, SCRIPT, body_style, equation_png, normalize_math
 
 
 def option_columns(options, preference, width):
     choices = {"four": (4, 2, 1), "two": (2, 1), "one": (1,)}
     style = body_style()
-    for columns in choices[preference]:
-        if columns == 1:
-            return 1
-        if all(not MATH.search(value) and "\n" not in value
-               and stringWidth(re.sub(r"</?(?:sub|sup)>", "", f"({index}) {value}"),
-                               style.fontName, style.fontSize) < width / columns - 16
-               for index, value in enumerate(options, 1)):
-            return columns
+    if preference == "one" or any("\n" in option for option in options):
+        return 1
+    widths = []
+    for index, option in enumerate(options, 1):
+        measured = stringWidth(f"({index}) ", style.fontName, style.fontSize)
+        for part in MATH.split(normalize_math(option)):
+            if MATH.fullmatch(part):
+                measured += equation_png(part[2:-2])[1]
+            else:
+                measured += stringWidth(SCRIPT.sub(lambda m: re.sub(r"</?[^>]+>", "", m[0]), part),
+                                        style.fontName, style.fontSize)
+        widths.append(measured)
+    return next(columns for columns in choices[preference]
+                if columns == 1 or max(widths) <= width / columns - 16)
 
 
 def content_rows(value):
