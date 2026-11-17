@@ -17,7 +17,7 @@ from question_bank.models import Chapter, Question, Subtopic
 
 from .pdf import build_pdf
 from .layout import content_rows
-from .structured import MATH, SCRIPT, equation_svg
+from .structured import MATH, SCRIPT, equation_svg, normalize_math
 from .word import build_word
 
 
@@ -53,7 +53,7 @@ def builder(request):
 def preview_tokens(value):
     value = value.replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)")
     tokens = []
-    for part in MATH.split(value):
+    for part in MATH.split(normalize_math(value)):
         if MATH.fullmatch(part):
             tokens.append(["math", b64encode(equation_svg(part[2:-2])).decode("ascii"), part[2:-2]])
             continue

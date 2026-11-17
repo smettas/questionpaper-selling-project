@@ -17,6 +17,13 @@ from svglib.svglib import svg2rlg
 
 MATH = re.compile(r"(\\\(.*?\\\)|\\\[.*?\\\])", re.S)
 SCRIPT = re.compile(r"(<(?:sub|sup)>[^<>]+</(?:sub|sup)>)")
+
+def normalize_math(value):
+    """Typeset known plain-text formulas from existing chapter banks."""
+    return (value.replace("√(K<sub>b</sub>/C)", r"\(\sqrt{\frac{K_b}{C}}\)")
+                 .replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)"))
+
+
 QUESTION_LABEL = re.compile(
     r"^\s*(?:(?:Assertion|Reason)(?:\s*\([AR]\))?\s*[:–—-]"
     r"|Statement\s*[-–—]?\s*(?:[IVX]+|\d+|[A-Z])\s*[:.)–—-]"
@@ -61,7 +68,7 @@ def body_style():
 
 def text_blocks(text, width, prefix="", *, bold_labels=False):
     blocks = []
-    for line in text.splitlines():
+    for line in normalize_math(text).splitlines():
         buffer = prefix
         prefix = ""
         if bold_labels:

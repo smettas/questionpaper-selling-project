@@ -14,7 +14,7 @@ from latex2mathml.converter import convert
 from PIL import Image
 
 from .layout import content_rows, option_columns
-from .structured import MATH, SCRIPT, split_question_label
+from .structured import MATH, SCRIPT, normalize_math, split_question_label
 
 
 def append_math(paragraph, expression):
@@ -62,7 +62,7 @@ def write_text(paragraph, value, *, bold_labels=False):
         label, value = split_question_label(value)
         if label:
             paragraph.add_run(label).bold = True
-    for part in MATH.split(value):
+    for part in MATH.split(normalize_math(value)):
         if MATH.fullmatch(part):
             append_math(paragraph, part[2:-2])
             continue
