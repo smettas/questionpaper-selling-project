@@ -1,5 +1,6 @@
 """Shared export layout decisions for Word and PDF."""
 import re
+from itertools import zip_longest
 
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
@@ -25,11 +26,49 @@ def option_columns(options, preference, width):
                 if columns == 1 or max(widths) <= width / columns - 16)
 
 
+LIST_ONE = re.compile(r"List\s*[-–—]?\s*(?:I|1)\s*[:.]?", re.IGNORECASE)
+LIST_TWO = re.compile(r"List\s*[-–—]?\s*(?:II|2)\s*[:.]?", re.IGNORECASE)
+LIST_ITEM = re.compile(r"\s*([A-Z]+)[.):]\s+\S")
+ROMAN_LABELS = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
+
+
+def stacked_matching_table(lines, start):
+    if not LIST_ONE.fullmatch(lines[start].strip()):
+        return None
+    end = start + 1
+    columns = []
+    for labels in ("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ROMAN_LABELS):
+        items = []
+        for label in labels:
+            while end < len(lines) and not lines[end].strip():
+                end += 1
+            if end == len(lines):
+                break
+            match = LIST_ITEM.match(lines[end])
+            if not match or match[1] != label:
+                break
+            items.append(lines[end].strip())
+            end += 1
+        columns.append(items)
+        if len(columns) == 1:
+            if end == len(lines) or not LIST_TWO.fullmatch(lines[end].strip()):
+                return None
+            end += 1
+    if min(map(len, columns)) < 2:
+        return None
+    return [["List I", "List II"], *zip_longest(*columns, fillvalue="")], end
+
+
 def content_rows(value):
-    """Group contiguous pipe-delimited lines with a common column count."""
+    """Group pipe-delimited rows and legacy matching lists into tables."""
     lines = value.splitlines()
     index = 0
     while index < len(lines):
+        matching = stacked_matching_table(lines, index)
+        if matching:
+            rows, index = matching
+            yield rows
+            continue
         cells = [cell.strip() for cell in lines[index].split("|")]
         end = index + 1
         if len(cells) > 1 and all(cells):

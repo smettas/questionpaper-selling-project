@@ -94,7 +94,7 @@ def add_watermark(section, text):
     anchor = OxmlElement("wp:anchor")
     for name, value in {
         "distT": "0", "distB": "0", "distL": "0", "distR": "0", "simplePos": "0",
-        "relativeHeight": "0", "behindDoc": "1", "locked": "0", "layoutInCell": "1",
+        "relativeHeight": "1", "behindDoc": "0", "locked": "0", "layoutInCell": "1",
         "allowOverlap": "1",
     }.items():
         anchor.set(name, value)
