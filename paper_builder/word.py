@@ -38,6 +38,10 @@ def append_math(paragraph, expression):
             token.text = " "
             token.set(qn("xml:space"), "preserve")
             return [node("r", [token])]
+        if tag == "mover" and len(element) == 2 and element[1].text in ("^", "→", "¯"):
+            accent = node("chr")
+            accent.set(qn("m:val"), {"^": "\u0302", "→": "\u20d7", "¯": "\u0304"}[element[1].text])
+            return [node("acc", [node("accPr", [accent]), node("e", translate(element[0]))])]
         structures = {"mfrac": ("f", ("num", "den")), "msup": ("sSup", ("e", "sup")),
                       "msub": ("sSub", ("e", "sub")), "msubsup": ("sSubSup", ("e", "sub", "sup"))}
         if tag in structures:
