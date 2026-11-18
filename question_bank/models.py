@@ -43,6 +43,8 @@ class Question(models.Model):
     artwork = models.ImageField(upload_to="questions/")
     hint = models.ImageField(upload_to="hints/", blank=True)
     structured = models.JSONField(default=dict, blank=True)
+    question_kind = models.CharField(max_length=16, default="mcq", db_index=True)
+    question_visual = models.CharField(max_length=8, blank=True, default="", db_index=True)
     fingerprint = models.CharField(max_length=64, unique=True)
     active = models.BooleanField(default=True)
 

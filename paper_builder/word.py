@@ -15,6 +15,7 @@ from PIL import Image
 
 from .layout import content_rows, option_columns
 from .structured import MATH, SCRIPT, normalize_math, split_question_label
+from .watermark import watermark_image
 
 
 def append_math(paragraph, expression):
@@ -86,11 +87,43 @@ def add_picture(paragraph, payload, width):
     paragraph.add_run().add_picture(png, width=Pt(size))
 
 
+def add_watermark(section, text):
+    payload, width, height = watermark_image(text)
+    run = section.header.paragraphs[0].add_run()
+    inline = run.add_picture(BytesIO(payload), width=Pt(width), height=Pt(height))._inline
+    anchor = OxmlElement("wp:anchor")
+    for name, value in {
+        "distT": "0", "distB": "0", "distL": "0", "distR": "0", "simplePos": "0",
+        "relativeHeight": "0", "behindDoc": "1", "locked": "0", "layoutInCell": "1",
+        "allowOverlap": "1",
+    }.items():
+        anchor.set(name, value)
+    position = OxmlElement("wp:simplePos")
+    position.set("x", "0")
+    position.set("y", "0")
+    anchor.append(position)
+    for axis in ("H", "V"):
+        position = OxmlElement(f"wp:position{axis}")
+        position.set("relativeFrom", "page")
+        alignment = OxmlElement("wp:align")
+        alignment.text = "center"
+        position.append(alignment)
+        anchor.append(position)
+    anchor.append(inline.extent)
+    anchor.append(OxmlElement("wp:wrapNone"))
+    for child in list(inline):
+        anchor.append(child)
+    inline.getparent().replace(inline, anchor)
+
+
 def build_word(details, sections, mode):
     doc = Document()
     sec = doc.sections[0]
     sec.page_width, sec.page_height = Pt(595.28), Pt(841.89)
     sec.left_margin = sec.right_margin = sec.top_margin = sec.bottom_margin = Pt(40)
+    watermark = details.get("watermark") if mode != "answer" else ""
+    if watermark:
+        add_watermark(sec, watermark)
     style = doc.styles["Normal"]
     style.font.name, style.font.size = "DejaVu Serif", Pt(10)
     style.paragraph_format.space_after = Pt(4)
@@ -127,9 +160,11 @@ def build_word(details, sections, mode):
             paragraphs[-1].paragraph_format.space_after = Pt(12)
 
     def column_section(start, count):
-        cols = doc.add_section(start)._sectPr.find(qn("w:cols"))
+        section = doc.add_section(start)
+        cols = section._sectPr.find(qn("w:cols"))
         cols.set(qn("w:num"), str(count))
         cols.set(qn("w:space"), "360")
+        return section
 
     header(details["institution"], title_and_date, metadata, answer=mode == "answer")
     if two:
@@ -216,8 +251,10 @@ def build_word(details, sections, mode):
 
     for answer in ([False, True] if mode == "combined" else [mode == "answer"]):
         if answer and mode == "combined":
-            if two:
-                column_section(WD_SECTION_START.NEW_PAGE, 1)
+            if two or watermark:
+                section = column_section(WD_SECTION_START.NEW_PAGE, 1)
+                if watermark:
+                    section.header.is_linked_to_previous = False
             else:
                 doc.add_page_break()
             header(title_and_date, answer=True)

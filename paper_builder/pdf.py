@@ -5,12 +5,14 @@ from PIL import Image
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Image as PDFImage
 from reportlab.platypus import BaseDocTemplate, Frame, FrameBreak, Flowable, Indenter, KeepTogether, NextPageTemplate, PageBreak, PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 from .structured import body_style, question_blocks
+from .watermark import watermark_image
 
 
 def artwork_image(field, max_width):
@@ -43,7 +45,9 @@ class QuestionNumber(Flowable):
 def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
     output = BytesIO()
     two = details.get("page_columns") == "two"
-    document = (BaseDocTemplate if two else SimpleDocTemplate)(
+    watermark = details.get("watermark") if not (preview or answer_key or mode == "answer") else ""
+    split_watermark = bool(watermark and mode == "combined")
+    document = (BaseDocTemplate if two or split_watermark else SimpleDocTemplate)(
         output, pagesize=A4, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40,
         title=details["title"] or ("Answer Key" if answer_key else "Question Paper"),
     )
@@ -106,7 +110,7 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
 
     for is_answer in ([False, True] if mode == "combined" else [standalone_answer]):
         if is_answer and mode == "combined":
-            if two:
+            if two or split_watermark:
                 flow.append(NextPageTemplate("AnswerStart"))
             flow.extend([PageBreak(), *answer_header])
             if two:
@@ -166,6 +170,16 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
         canvas.setFont("Helvetica", 9)
         canvas.drawRightString(A4[0] - 40, 23, f"Page {doc.page}")
 
+    question_page = footer
+    if watermark:
+        payload, mark_width, mark_height = watermark_image(watermark)
+        mark = ImageReader(BytesIO(payload))
+
+        def question_page(canvas, doc):
+            canvas.drawImage(mark, (A4[0] - mark_width) / 2, (A4[1] - mark_height) / 2,
+                             width=mark_width, height=mark_height, mask="auto")
+            footer(canvas, doc)
+
     if two:
         column_width = (document.width - 18) / 2
 
@@ -181,14 +195,23 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
             return frames
 
         templates = [
-            PageTemplate("First", opening_frames(header_height), onPage=footer, autoNextPageTemplate="Body"),
-            PageTemplate("Body", columns(document.height), onPage=footer),
+            PageTemplate("First", opening_frames(header_height), onPage=question_page, autoNextPageTemplate="Body"),
+            PageTemplate("Body", columns(document.height), onPage=question_page),
         ]
         if answer_header:
             templates.append(PageTemplate("AnswerStart", opening_frames(answer_header_height),
                                           onPage=footer, autoNextPageTemplate="Body"))
         document.addPageTemplates(templates)
         document.build(flow)
+    elif split_watermark:
+        def page_frame():
+            return Frame(document.leftMargin, document.bottomMargin, document.width, document.height)
+
+        document.addPageTemplates([
+            PageTemplate("Questions", page_frame(), onPage=question_page),
+            PageTemplate("AnswerStart", page_frame(), onPage=footer),
+        ])
+        document.build(flow)
     else:
-        document.build(flow, onFirstPage=footer, onLaterPages=footer)
+        document.build(flow, onFirstPage=question_page, onLaterPages=question_page)
     return output.getvalue()

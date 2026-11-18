@@ -10,6 +10,7 @@ from django.db import transaction
 from paper_builder.structured import validate_content
 from question_bank.chapter_zip import read_chapter_zip
 from question_bank.models import Chapter, Question, Subtopic
+from question_bank.question_types import classify_question
 from .import_paper import reuse_named_entry
 
 
@@ -46,7 +47,9 @@ class Command(BaseCommand):
             topics = {topic: reuse_named_entry(Subtopic, topic, chapter=chapter) for topic, _ in counts}
             for uid, topic, difficulty, answer, content in records:
                 fingerprint = sha256(f"structured-v1:{manifest['subject']}:{manifest['level']}:{uid}".encode()).hexdigest()
+                kind, visual = classify_question(content, content.get("type"))
                 values = dict(subtopic=topics[topic], difficulty=difficulty,
+                              question_kind=kind, question_visual=visual,
                               correct_option=answer, structured=content)
                 question, new = Question.objects.get_or_create(
                     fingerprint=fingerprint, defaults={**values, "active": options["publish"]},

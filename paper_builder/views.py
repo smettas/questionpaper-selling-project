@@ -14,9 +14,9 @@ from django.views.decorators.http import require_GET, require_POST
 from PIL import Image
 
 from question_bank.models import Chapter, Question, Subtopic
+from question_bank.question_types import QUESTION_TYPES
 
 from .pdf import build_pdf
-from .layout import content_rows
 from .structured import MATH, SCRIPT, equation_svg, normalize_math
 from .word import build_word
 
@@ -26,6 +26,7 @@ class PaperDetails(forms.Form):
     page_columns = forms.ChoiceField(choices=[(v, v) for v in ("one", "two")], required=False)
     arrangement = forms.ChoiceField(choices=[(v, v) for v in ("separate", "combined", "paired")], required=False)
     output_format = forms.ChoiceField(choices=[(v, v) for v in ("pdf", "docx", "both")], required=False)
+    watermark = forms.CharField(max_length=80, required=False)
     institution = forms.CharField(max_length=120, required=False)
     title = forms.CharField(max_length=120, required=False)
     date = forms.DateField(input_formats=["%Y-%m-%d"], required=False)
@@ -46,12 +47,12 @@ def builder(request):
         Exists(published.filter(subtopic_id=OuterRef("pk")))
     ).values("id", "chapter_id", "name"))
     return render(request, "paper_builder/index.html", {
+        "question_types": QUESTION_TYPES,
         "catalog": {"chapters": chapters, "topics": topics},
     })
 
 
 def preview_tokens(value):
-    value = value.replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)")
     tokens = []
     for part in MATH.split(normalize_math(value)):
         if MATH.fullmatch(part):
@@ -72,11 +73,7 @@ def inline_preview(content):
     if not content:
         return None
     return {
-        "stem": [
-            {"text": preview_tokens(part)} if isinstance(part, str)
-            else {"rows": [[preview_tokens(cell) for cell in row] for row in part]}
-            for part in content_rows(content["stem"])
-        ],
+        "stem": preview_tokens(content["stem"]),
         "options": [preview_tokens(option) for option in content["options"]],
         "hint": preview_tokens(content["hint"]),
         "diagrams": content["diagrams"],
@@ -99,6 +96,15 @@ def browse_questions(request):
             if not value.isascii() or not value.isdecimal() or len(value) > 18:
                 return JsonResponse({"error": "Invalid filter."}, status=400)
             query = query.filter(**{field: int(value)})
+    question_type = request.GET.get("question_type", "")
+    if question_type and question_type not in dict(QUESTION_TYPES):
+        return JsonResponse({"error": "Invalid question type."}, status=400)
+    if question_type in ("diagram", "graph"):
+        query = query.filter(question_visual=question_type)
+    elif question_type:
+        query = query.filter(question_kind=question_type)
+        if question_type == "mcq":
+            query = query.filter(question_visual="")
     shuffle = request.GET.get("shuffle", "")
     if shuffle:
         if len(shuffle) > 32 or any(char not in "0123456789abcdef" for char in shuffle):

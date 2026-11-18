@@ -124,7 +124,8 @@ def read_chapter_zip(path):
                     raise ValueError(f"Repeated question: {uid}")
                 fingerprints.add(fingerprint)
                 records.append((uid, topic, difficulty, answer,
-                                {"stem": stem, "options": options, "hint": hint, "diagrams": diagrams}))
+                                {"stem": stem, "options": options, "hint": hint, "diagrams": diagrams,
+                                 "type": entry.get("type", "")}))
         if len(records) > 20000:
             raise ValueError("Use partial ZIPs of at most 20,000 questions.")
         return manifest, records

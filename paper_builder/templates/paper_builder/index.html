@@ -22,6 +22,7 @@
 <label>Chapter<select id="chapter"></select></label>
 <label>Subtopic<select id="topic"></select></label>
 <label>Difficulty<select id="difficulty"><option value="">All difficulties</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+<label>Question type<select id="question-type"><option value="">All types</option>{% for value, label in question_types %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
 </div>
 <button type="button" id="shuffle-questions">Shuffle questions</button>
 <p id="available" class="available" role="status"></p>
@@ -36,6 +37,7 @@
 <h2>Paper details <span class="muted">(optional)</span></h2>
 <label>School or academy<input name="institution" maxlength="120" placeholder="Ojas One Academy"></label>
 <label>Paper title<input name="title" maxlength="120"></label>
+<label>Watermark <span class="muted">(optional)</span><input name="watermark" maxlength="80" placeholder="Ojas One Academy"></label>
 <label>Exam date<input name="date" type="date"></label>
 <div class="grid">
 <label>Maximum marks<input name="marks" type="number" min="1" max="10000"></label>

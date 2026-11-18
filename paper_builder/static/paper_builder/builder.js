@@ -5,6 +5,7 @@ const subject = document.querySelector('#subject');
 const chapter = document.querySelector('#chapter');
 const topic = document.querySelector('#topic');
 const difficulty = document.querySelector('#difficulty');
+const questionType = document.querySelector('#question-type');
 const available = document.querySelector('#available');
 const results = document.querySelector('#question-results');
 const selectedList = document.querySelector('#selected');
@@ -137,30 +138,6 @@ function formattedText(tokens) {
   return block;
 }
 
-function appendStem(target, blocks) {
-  for (const block of blocks) {
-    if (block.text) {
-      target.append(formattedText(block.text));
-      continue;
-    }
-    const table = document.createElement('table');
-    table.className = 'preview-table';
-    const header = table.createTHead().insertRow();
-    const body = table.createTBody();
-    for (const tokens of block.rows[0]) {
-      const cell = document.createElement('th');
-      cell.scope = 'col';
-      cell.append(formattedText(tokens));
-      header.append(cell);
-    }
-    for (const tokensRow of block.rows.slice(1)) {
-      const row = body.insertRow();
-      for (const tokens of tokensRow) row.insertCell().append(formattedText(tokens));
-    }
-    target.append(table);
-  }
-}
-
 function appendDiagrams(target, preview, placement) {
   for (const diagram of preview.diagrams) {
     if (diagram.placement === placement) {
@@ -188,7 +165,7 @@ function showQuestions(questions) {
     card.append(header);
     const preview = question.preview;
     if (preview) {
-      appendStem(card, preview.stem);
+      card.append(formattedText(preview.stem));
       appendDiagrams(card, preview, 'question');
       const options = document.createElement('ol');
       options.className = 'preview-options';
@@ -231,7 +208,7 @@ async function loadQuestions(target) {
   results.replaceChildren();
   document.querySelector('#pagination').hidden = true;
   const params = new URLSearchParams({
-    subject: subject.value, chapter: chapter.value, topic: topic.value, difficulty: difficulty.value, page: target, shuffle,
+    subject: subject.value, chapter: chapter.value, topic: topic.value, difficulty: difficulty.value, question_type: questionType.value, page: target, shuffle,
   });
   try {
     const response = await fetch(`${filters.dataset.url}?${params}`, {signal: controller.signal});
@@ -252,7 +229,7 @@ async function loadQuestions(target) {
 
 subject.onchange = () => { updateChapters(); reshuffleQuestions(); };
 chapter.onchange = () => { updateTopics(); reshuffleQuestions(); };
-topic.onchange = difficulty.onchange = reshuffleQuestions;
+topic.onchange = difficulty.onchange = questionType.onchange = reshuffleQuestions;
 document.querySelector('#shuffle-questions').onclick = reshuffleQuestions;
 previous.onclick = () => loadQuestions(page - 1);
 next.onclick = () => loadQuestions(page + 1);
