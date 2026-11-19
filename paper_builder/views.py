@@ -43,6 +43,8 @@ def builder(request):
     chapters = list(Chapter.objects.filter(
         Exists(published.filter(subtopic__chapter_id=OuterRef("pk")))
     ).values("id", "subject", "level", "name"))
+    from question_bank.chapter_order import order_chapters
+    chapters = order_chapters(chapters)
     topics = list(Subtopic.objects.filter(
         Exists(published.filter(subtopic_id=OuterRef("pk")))
     ).values("id", "chapter_id", "name"))
