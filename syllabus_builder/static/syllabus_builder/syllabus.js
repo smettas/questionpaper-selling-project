@@ -105,7 +105,7 @@
   function excludes(){return[...new Set([...seen,...selected.keys(),...candidates.map(q=>q.id)])].slice(-10000);}
   function remember(rows){for(const q of rows)seen.add(q.id);while(seen.size>9000)seen.delete(seen.values().next().value);}
   async function operation(fn){if(busy)return;busy=true;controls();try{await fn();}catch(error){say('sy-review-status',error.message,true);$('sy-review').hidden=false;}finally{busy=false;controls();queueSave();}}
-  function controls(){for(const id of ['sy-load','sy-more','sy-reshuffle','sy-keep-all'])$(id).disabled=busy||(id==='sy-load'&&!currentCounts?.total);for(const card of output.querySelectorAll('[data-sy-id]'))for(const control of card.querySelectorAll('[data-replace],[data-remove]'))control.disabled=busy||(control.hasAttribute('data-replace')&&selected.has(Number(card.dataset.syId)));}
+  function controls(){for(const id of ['sy-load','sy-more','sy-reshuffle','sy-keep-all'])$(id).disabled=busy||(id==='sy-load'&&!currentCounts?.total);for(const card of output.querySelectorAll('[data-sy-id]'))for(const control of card.querySelectorAll('[data-replace],[data-remove]'))control.disabled=busy;}
   async function loadBatch(){await operation(async()=>{
     const target=integer('sy-target',1,300);const count=integer('sy-count',1,300), sc=scope(), version=scopeVersion, allocation=allocated(count);
     say('sy-review-status','Choosing random candidates…');$('sy-review').hidden=false;
@@ -121,7 +121,7 @@
     $('sy-review-count').textContent=`${candidates.length} candidates · ${kept} kept from this batch · ${keptCount()} selected for ${names[batchScope?.subject||$('sy-subject').value]} · target ${targets[batchScope?.subject]||$('sy-target').value||'—'}`;
     $('sy-targets').textContent=Object.entries(targets).map(([key,target])=>`${names[key]}: ${[...selected.values()].filter(q=>q.subject===names[key]).length} / ${target} selected`).join(' · ');
   }
-  function selectedChanged(){reviewCount();for(const card of output.querySelectorAll('[data-sy-id]')){const id=Number(card.dataset.syId),kept=selected.has(id);card.classList.toggle('is-kept',kept);const b=card.querySelector('[data-keep]');if(b){b.textContent=kept?'✓ Kept · Unkeep':'Keep for paper';b.setAttribute('aria-pressed',String(kept));}const replace=card.querySelector('[data-replace]');if(replace)replace.disabled=kept||busy;}
+  function selectedChanged(){reviewCount();for(const card of output.querySelectorAll('[data-sy-id]')){const id=Number(card.dataset.syId),kept=selected.has(id);card.classList.toggle('is-kept',kept);const b=card.querySelector('[data-keep]');if(b){b.textContent=kept?'✓ Kept · Unkeep':'Keep for paper';b.setAttribute('aria-pressed',String(kept));}const replace=card.querySelector('[data-replace]');if(replace){replace.disabled=busy;replace.textContent=kept?'Replace selected':'Replace';replace.title=kept?'Swap this selected question for a new one without changing the paper count.':'Show a different question in this position.';}}
     queueSave();
   }
   function keep(q){if(!selected.has(q.id)&&selected.size>=300){say('sy-review-status','A paper can contain up to 300 questions. Remove one before adding more.',true);return;}toggle(cache.get(q.id)||q);selectedChanged();}
@@ -137,6 +137,43 @@
       say('sy-review-status','Updated. Kept questions are unchanged. Type allocations apply to the initial batch; replacements use its syllabus and type filter.');await renderPage();
     });
   }
+  async function replaceOne(oldId){
+    if(busy)return;
+    if(!batchScope){say('sy-review-status','Load a candidate batch before replacing a question.',true);return;}
+    const original=candidates.find(q=>q.id===oldId);if(!original)return;
+    const anchor=output.querySelector(`[data-sy-id="${oldId}"]`);
+    const notice=el('p','Finding a new question and loading its full preview…','sy-replace-status');notice.setAttribute('role','status');
+    anchor?.querySelector('.sy-q-actions')?.after(notice);
+    await operation(async()=>{
+      try{
+        const sc=batchScope,version=batchVersion;
+        // Preserve the allocation group and difficulty of the replaced question.
+        // The batch's format filter still applies (e.g. a diagram-based A–R).
+        const group=['graph','diagram'].includes(original.visual)?original.visual:(original.kind||'mcq');
+        const data=await api(root.dataset.sampleUrl,{...sc,difficulty:original.difficulty||sc.difficulty,count:1,quotas:{[group]:1},exclude:excludes()});
+        if(sc!==batchScope||version!==batchVersion)return;
+        const replacement=data.questions?.[0];
+        if(!replacement||replacement.id===oldId||selected.has(replacement.id)||candidates.some(q=>q.id===replacement.id))throw new Error('A new question was not available. The original question is unchanged.');
+        const detail=await api(`${root.dataset.detailsUrl}?${new URLSearchParams({ids:replacement.id})}`);
+        if(sc!==batchScope||version!==batchVersion)return;
+        const full=detail.questions?.find(q=>q.id===replacement.id);
+        if(!full)throw new Error('The new question preview could not load. The original question is unchanged. Please try again.');
+        const at=candidates.findIndex(q=>q.id===oldId);if(at<0)return;
+        const next={...replacement,...full};
+        const wasSelected=selected.has(oldId);
+        // Stage the preview before touching the batch or selection. Swap at the
+        // same insertion position so answer numbering and the total stay stable.
+        if(wasSelected){const order=[...selected.values()].map(q=>q.id===oldId?next:q);selected.clear();for(const q of order)selected.set(q.id,q);}
+        candidates[at]=replacement;cache.delete(oldId);cache.set(next.id,next);remember([replacement]);
+        clearDownloads();refreshSelection();
+        const oldCard=output.querySelector(`[data-sy-id="${oldId}"]`);
+        if(oldCard){const nextCard=card(next);nextCard.classList.add('sy-replaced');const message=el('p',`Replaced #${oldId} with #${next.id}${wasSelected?' · still selected for the paper':''}.`,'sy-replace-status');message.setAttribute('role','status');nextCard.querySelector('.sy-q-actions').after(message);oldCard.replaceWith(nextCard);nextCard.querySelector('[data-replace]').focus({preventScroll:true});nextCard.scrollIntoView({block:'nearest',behavior:'smooth'});}
+        else await renderPage();
+        selectedChanged();
+        say('sy-review-status',`Replaced #${oldId} with #${next.id}. ${wasSelected?'Your selected-question count is unchanged.':'The new question is ready to review; use Keep for paper to select it.'}`);
+      }catch(error){notice.textContent=`${error.message} Original question #${oldId} is unchanged.`;notice.classList.add('sy-error');throw error;}
+    });
+  }
   function tokenLines(tokens){const rows=[[]];for(const t of tokens||[]){if(t[0]!=='text'){rows.at(-1).push(t);continue;}String(t[1]).split('\n').forEach((text,i)=>{if(i)rows.push([]);if(text)rows.at(-1).push(['text',text]);});}return rows;}
   function line(tokens){const out=el('div',undefined,'sy-text');let first=true;
     for(const[k,value,alt]of tokens||[]){if(k==='math'){const img=el('img');img.src=`data:image/svg+xml;base64,${value}`;img.alt=alt||'Equation';img.className='sy-math';out.append(img);}else if(k==='sub'||k==='sup')out.append(el(k,value));else{const s=String(value||''),match=first&&s.match(/^\s*((?:(?:Assertion|Reason)(?:\s*\([AR]\))?|Statement\s*(?:[IVX]+|\d+))\s*[:.)–—-])/i);if(match)out.append(el('strong',match[0]),s.slice(match[0].length));else out.append(s);}if(String(value||'').trim())first=false;}return out;}
@@ -146,10 +183,10 @@
   function figures(node,preview,placement){for(const d of preview.diagrams||[])if(d.placement===placement)node.append(image(`data:image/png;base64,${d.png}`,'Question diagram'));}
   function reportButton(id){return button('Report correction',event=>openReport(id,event.currentTarget),'sy-report-link');}
   function card(q,failed){
-    const box=el('article',undefined,'sy-question');box.dataset.syId=q.id;
+    const box=el('article',undefined,'sy-question');box.dataset.syId=q.id;box.id=`sy-candidate-${q.id}`;
     const heading=el('div',undefined,'sy-q-heading');heading.append(el('h4',`Question #${q.id}`));box.append(heading,el('p',[q.subject,q.level?`Class ${q.level}`:'',q.chapter,q.subtopic,q.difficulty,labels[q.visual||q.kind]||''].filter(Boolean).join(' · '),'sy-meta'));
-    const actions=el('div',undefined,'sy-q-actions'),keepButton=button('Keep for paper',()=>keep(q));keepButton.dataset.keep='';const replace=button('Replace',()=>refreshUnkept('replace',q.id));replace.dataset.replace='';
-    actions.append(keepButton,replace,button('Remove candidate',()=>{if(selected.has(q.id))toggle(q);const at=candidates.findIndex(x=>x.id===q.id);if(at>=0)candidates.splice(at,1);cache.delete(q.id);renderPage();queueSave();}),reportButton(q.id));box.append(actions);
+    const actions=el('div',undefined,'sy-q-actions'),keepButton=button('Keep for paper',()=>keep(q));keepButton.dataset.keep='';const replace=button('Replace',()=>replaceOne(q.id));replace.dataset.replace='';
+    const remove=button('Remove candidate',()=>{if(selected.has(q.id))toggle(q);const at=candidates.findIndex(x=>x.id===q.id);if(at>=0)candidates.splice(at,1);cache.delete(q.id);renderPage();queueSave();});remove.dataset.remove='';actions.append(keepButton,replace,remove,reportButton(q.id));box.append(actions);
     if(failed){box.append(el('p',failed,'sy-error'),button('Retry preview',()=>{cache.delete(q.id);renderPage();}));keepButton.disabled=true;return box;}
     if(q.preview){box.append(rich(q.preview.stem));figures(box,q.preview,'question');const opts=el('ol',undefined,'sy-options');for(const[i,tokens]of(q.preview.options||[]).entries()){const li=el('li');li.append(el('span',`(${i+1})`),rich(tokens));opts.append(li);}box.append(opts);}
     else if(q.image)box.append(image(q.image,`Question ${q.id}`));
@@ -217,5 +254,5 @@
   // The Android host's New Paper button clears the same form. Clear this draft too.
   form.addEventListener('reset',()=>{scopeVersion++;countVersion++;countsController?.abort();for(const key of Object.keys(targets))delete targets[key];candidates.length=0;chosen.clear();topics.clear();seen.clear();cache.clear();batchScope=null;currentPage=0;pageVersion++;try{localStorage.removeItem(DRAFT);}catch(_){}setTimeout(()=>{renderChapters();renderTopics();$('sy-review').hidden=true;changed();},0);});
   renderChapters();renderTopics();quotaSummary();$('sy-load').disabled=true;restoreDraft();
-  window.OjasSyllabus={version:1};
+  window.OjasSyllabus={version:2};
 })();
