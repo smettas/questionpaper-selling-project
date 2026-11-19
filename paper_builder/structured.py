@@ -24,19 +24,9 @@ NUMERIC_SQUARE_ROOT = re.compile(r"√\(([0-9.]+)²\s*([+−-])\s*([0-9.]+)²\)"
 
 
 def normalize_math(value):
-    """Typeset known plain-text formulas from existing chapter banks."""
-    def typeset_root(match):
-        left, operator, right = match.groups()
-        return rf"\(\sqrt{{{left}^2 {operator.replace('−', '-')} {right}^2}}\)"
-
-    return "".join(
-        part if MATH.fullmatch(part) else NUMERIC_SQUARE_ROOT.sub(
-            typeset_root,
-            part.replace("√(K<sub>b</sub>/C)", r"\(\sqrt{\frac{K_b}{C}}\)")
-                .replace("√(n(n+2))", r"\(\sqrt{n(n+2)}\)"),
-        )
-        for part in MATH.split(value)
-    )
+    """Normalize plain-text roots for browser, PDF and editable Word output."""
+    from .math_notation import normalize_math_text
+    return normalize_math_text(value)
 QUESTION_LABEL = re.compile(
     r"^\s*(?:(?:Assertion|Reason)(?:\s*\([AR]\))?\s*[:–—-]"
     r"|Statement\s*[-–—]?\s*(?:[IVX]+|\d+|[A-Z])\s*[:.)–—-]"
