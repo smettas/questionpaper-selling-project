@@ -6,6 +6,8 @@
 <title>NEET Paper Builder</title>
 <link rel="stylesheet" href="{% static 'paper_builder/builder.css' %}">
 <script defer src="{% static 'paper_builder/builder.js' %}"></script>
+<link rel="stylesheet" href="{% static 'syllabus_builder/syllabus.css' %}?v=1">
+<script defer src="{% static 'syllabus_builder/syllabus.js' %}?v=1"></script>
 </head>
 <body>
 <header><div class="brand">NEET Paper Builder</div></header>
@@ -17,6 +19,8 @@
 <div class="workspace">
 <section class="card bank">
 <h2>Question selection</h2>
+{% include "syllabus_builder/panel.html" %}
+
 <div class="grid" id="filters" data-url="{% url 'browse-questions' %}">
 <label>Subject<select id="subject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="biology">Biology</option></select></label>
 <label>Chapter<select id="chapter"></select></label>

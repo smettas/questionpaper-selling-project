@@ -30,6 +30,8 @@ INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "question_bank", "paper_builder",
+
+    "syllabus_builder.apps.SyllabusBuilderConfig",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

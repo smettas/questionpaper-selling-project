@@ -1,3 +1,4 @@
+from django.urls import include
 from paper_builder import selected_preview
 from django.contrib import admin
 from django.db import connection
@@ -19,6 +20,7 @@ def health(request):
 
 
 urlpatterns = [
+    path("syllabus/", include("syllabus_builder.urls", namespace="syllabus_builder")),
     path("selected-question/<int:pk>/", selected_preview.selected_question, name="selected-question-preview"),
     path("", views.builder, name="builder"),
     path("questions/", views.browse_questions, name="browse-questions"),

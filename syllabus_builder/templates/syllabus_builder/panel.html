@@ -1,0 +1,47 @@
+<section id="syllabus-builder" data-counts-url="{% url 'syllabus_builder:counts' %}" data-sample-url="{% url 'syllabus_builder:sample' %}" data-details-url="{% url 'syllabus_builder:details' %}" data-report-url="{% url 'syllabus_builder:report' %}">
+  <div class="sy-mode" role="group" aria-label="Question selection method">
+    <button type="button" id="sy-manual" aria-pressed="true">Browse manually</button>
+    <button type="button" id="sy-covered" aria-pressed="false">Build from covered syllabus</button>
+  </div>
+  <div id="sy-panel" hidden>
+    <p class="sy-intro">Choose covered chapters and topics, review a random batch, then keep the questions you want in the paper.</p>
+    <div class="sy-grid">
+      <label>Subject<select id="sy-subject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="biology">Biology</option></select></label>
+      <label>Difficulty<select id="sy-difficulty"><option value="">All difficulties</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+    </div>
+    <details class="sy-picker" open><summary id="sy-chapter-summary">Choose chapters</summary>
+      <div class="sy-search"><input id="sy-chapter-search" type="search" placeholder="Find a chapter" aria-label="Find a chapter"></div>
+      <div class="sy-tools"><button type="button" id="sy-all-chapters">Select all chapters</button><button type="button" id="sy-clear-chapters">Clear chapters</button></div>
+      <div id="sy-chapters" class="sy-check-list"></div>
+    </details>
+    <details class="sy-picker"><summary id="sy-topic-summary">Topics · all included by default</summary><div id="sy-topics"></div></details>
+    <div class="sy-grid sy-spaced">
+      <label>Question type<select id="sy-type"><option value="">All types</option><option value="mcq">Standard MCQs</option><option value="assertion-reason">Assertion–reason</option><option value="statement">Statement-based</option><option value="matching">Match the following</option><option value="diagram">Diagrams</option><option value="graph">Graphs</option></select></label>
+      <label>Final questions for this subject<input type="number" id="sy-target" min="1" max="300" value="45"></label>
+      <label>Candidates to review<input type="number" id="sy-count" min="1" max="300" value="60"></label>
+    </div>
+    <p id="sy-count-status" role="status">Select at least one chapter.</p>
+    <label class="sy-check"><input id="sy-use-quotas" type="checkbox"> Set how many candidates of each type</label>
+    <div class="sy-table-wrap"><table class="sy-counts"><caption>Available questions in the selected syllabus</caption><thead><tr><th scope="col">Question group</th><th scope="col">Available</th><th scope="col" class="sy-quota-cell" hidden>Request</th></tr></thead><tbody id="sy-count-rows"></tbody></table></div>
+    <p class="sy-note">Counts use the bank’s type labels. Diagram and graph questions are counted in those groups first, so each question is counted once here. An assertion–reason filter can still include an assertion–reason question with a diagram.</p>
+    <p id="sy-quota-status" class="sy-note" role="status"></p>
+    <button type="button" class="primary" id="sy-load">Show random candidates</button>
+    <div id="sy-review" hidden>
+      <div class="sy-review-heading"><h3>Review candidates</h3><p id="sy-review-count" role="status"></p></div>
+      <p id="sy-targets" class="sy-note"></p>
+      <p id="sy-stale" class="sy-notice" hidden>Syllabus filters changed. Load a new batch to apply them. This batch still uses its original syllabus; kept questions stay selected.</p>
+      <div class="sy-review-tools"><button type="button" id="sy-keep-all">Keep all candidates</button><button type="button" id="sy-reshuffle">Reshuffle unkept</button><label>Add candidates<input id="sy-more-count" type="number" min="1" max="100" value="10"></label><button type="button" id="sy-more">Add more</button><label class="sy-check"><input id="sy-shuffle-final" type="checkbox"> Shuffle selected questions within each subject</label></div>
+      <p id="sy-review-status" role="status"></p>
+      <div id="sy-candidates"></div>
+      <nav class="sy-pagination" aria-label="Candidate pages"><button type="button" id="sy-prev">Previous</button><span id="sy-page"></span><button type="button" id="sy-next">Next</button></nav>
+    </div>
+  </div>
+</section>
+<dialog id="sy-report-dialog" aria-labelledby="sy-report-title">
+  <h2 id="sy-report-title">Report a correction</h2>
+  <p id="sy-report-question"></p>
+  <label>What needs checking?<select id="sy-report-category"><option value="question">Question wording</option><option value="answer">Answer key</option><option value="solution">Explanation</option><option value="diagram">Diagram / graph</option><option value="format">Formatting</option><option value="other">Other</option></select></label>
+  <label>Describe the issue<textarea id="sy-report-note" rows="5" minlength="10" maxlength="2000" placeholder="Explain what looks wrong and, if known, the correct answer."></textarea></label>
+  <p id="sy-report-status" role="status"></p>
+  <div class="sy-tools"><button type="button" id="sy-report-send">Send for review</button><button type="button" id="sy-report-close">Close</button></div>
+</dialog>
