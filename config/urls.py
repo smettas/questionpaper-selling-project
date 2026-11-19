@@ -1,3 +1,4 @@
+from paper_builder import selected_preview
 from django.contrib import admin
 from django.db import connection
 from django.db.utils import DatabaseError
@@ -18,6 +19,7 @@ def health(request):
 
 
 urlpatterns = [
+    path("selected-question/<int:pk>/", selected_preview.selected_question, name="selected-question-preview"),
     path("", views.builder, name="builder"),
     path("questions/", views.browse_questions, name="browse-questions"),
     path("questions/<int:pk>/<str:kind>/", views.question_asset, name="question-asset"),

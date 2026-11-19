@@ -51,7 +51,7 @@
 <label>Logo <span class="muted">(optional)</span><input type="file" name="logo" accept="image/png,image/jpeg,image/webp"></label>
 <h3>Selected questions</h3>
 <p id="total" aria-live="polite"></p>
-<div id="selected"></div>
+<div id="selected" data-preview-url="{% url 'selected-question-preview' pk=0 %}"></div>
 <fieldset class="export-settings">
 <legend>Export settings</legend>
 <label>Subjects to export<select name="export_subject"><option value="">All selected subjects</option><option>Physics</option><option>Chemistry</option><option>Biology</option></select></label>
