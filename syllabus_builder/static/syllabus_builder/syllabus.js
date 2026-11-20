@@ -254,5 +254,5 @@
   // The Android host's New Paper button clears the same form. Clear this draft too.
   form.addEventListener('reset',()=>{scopeVersion++;countVersion++;countsController?.abort();for(const key of Object.keys(targets))delete targets[key];candidates.length=0;chosen.clear();topics.clear();seen.clear();cache.clear();batchScope=null;currentPage=0;pageVersion++;try{localStorage.removeItem(DRAFT);}catch(_){}setTimeout(()=>{renderChapters();renderTopics();$('sy-review').hidden=true;changed();},0);});
   renderChapters();renderTopics();quotaSummary();$('sy-load').disabled=true;restoreDraft();
-  window.OjasSyllabus={version:2};
+  window.OjasSyllabus={version:2,renderRichText:rich,reportQuestion:openReport};
 })();

@@ -7,7 +7,9 @@
 <link rel="stylesheet" href="{% static 'paper_builder/builder.css' %}">
 <script defer src="{% static 'paper_builder/builder.js' %}"></script>
 <link rel="stylesheet" href="{% static 'syllabus_builder/syllabus.css' %}?v=2">
-<script defer src="{% static 'syllabus_builder/syllabus.js' %}?v=2"></script>
+<script defer src="{% static 'syllabus_builder/syllabus.js' %}?v=3"></script>
+<link rel="stylesheet" href="{% static 'test_patterns/patterns.css' %}?v=1">
+<script defer src="{% static 'test_patterns/patterns.js' %}?v=1"></script>
 </head>
 <body>
 <header><div class="brand">NEET Paper Builder</div></header>
@@ -19,6 +21,7 @@
 <div class="workspace">
 <section class="card bank">
 <h2>Question selection</h2>
+{% include "test_patterns/panel.html" %}
 {% include "syllabus_builder/panel.html" %}
 
 <div class="grid" id="filters" data-url="{% url 'browse-questions' %}">

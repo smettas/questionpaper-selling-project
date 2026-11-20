@@ -92,6 +92,9 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
         flow.append(Paragraph("Answer Key", subtitle))
     if flow:
         flow.extend([double_rule(), Spacer(1, 12)])
+    # OJAS_COVERED_CHAPTERS_PDF
+    from test_patterns.exporting import pdf_coverage
+    flow.extend(pdf_coverage(details, width))
     header_height = 0
     if two and flow:
         header_height = sum(item.wrap(width, document.height)[1] for item in flow) + 24

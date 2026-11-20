@@ -167,6 +167,9 @@ def build_word(details, sections, mode):
         return section
 
     header(details["institution"], title_and_date, metadata, answer=mode == "answer")
+    # OJAS_COVERED_CHAPTERS_WORD
+    from test_patterns.exporting import word_coverage
+    word_coverage(doc, details)
     if two:
         column_section(WD_SECTION_START.CONTINUOUS, 2)
 

@@ -32,6 +32,8 @@ INSTALLED_APPS = [
     "question_bank", "paper_builder",
 
     "syllabus_builder.apps.SyllabusBuilderConfig",
+
+    "test_patterns.apps.TestPatternsConfig",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

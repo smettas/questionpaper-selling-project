@@ -185,6 +185,9 @@ def download(request):
             by_subject[question.subtopic.chapter.subject].append(question)
         selected = [(label, by_subject[subject]) for subject, label in Chapter.Subject.choices
                     if by_subject[subject]]
+        # OJAS_TEST_PATTERN_EXPORT
+        from test_patterns.exporting import prepare_export
+        details, selected = prepare_export(request, details, ids, rows, selected)
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")
 

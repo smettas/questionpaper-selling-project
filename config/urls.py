@@ -20,6 +20,7 @@ def health(request):
 
 
 urlpatterns = [
+    path("test-patterns/", include("test_patterns.urls", namespace="test_patterns")),
     path("syllabus/", include("syllabus_builder.urls", namespace="syllabus_builder")),
     path("selected-question/<int:pk>/", selected_preview.selected_question, name="selected-question-preview"),
     path("", views.builder, name="builder"),
