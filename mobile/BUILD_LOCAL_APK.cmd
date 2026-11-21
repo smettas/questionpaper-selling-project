@@ -9,9 +9,7 @@ call npm install || exit /b 1
 call npx expo install --check || exit /b 1
 call npm run check || exit /b 1
 call npm test || exit /b 1
-if not exist android\gradlew.bat (
- call npx expo prebuild --platform android --no-install || exit /b 1
-)
+call npx expo prebuild --platform android --no-install || exit /b 1
 cd android
 call gradlew.bat assembleRelease || exit /b 1
 echo.
