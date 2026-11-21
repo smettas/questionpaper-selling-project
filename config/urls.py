@@ -20,6 +20,8 @@ def health(request):
 
 
 urlpatterns = [
+    # OJAS_NATIVE_API_V1
+    path('api/mobile/v1/', include('native_api.urls')),
     path("test-patterns/", include("test_patterns.urls", namespace="test_patterns")),
     path("syllabus/", include("syllabus_builder.urls", namespace="syllabus_builder")),
     path("selected-question/<int:pk>/", selected_preview.selected_question, name="selected-question-preview"),

@@ -1,0 +1,14 @@
+{
+  "name": "ojas-question-builder-native", "version": "1.0.0", "private": true,
+  "main": "index.js",
+  "scripts": {"start":"expo start","android":"expo run:android","test":"node --test tests/*.test.cjs","check":"node scripts/check-source.cjs"},
+  "dependencies": {
+    "expo":"~54.0.37", "react":"19.1.0", "react-native":"0.81.5",
+    "expo-status-bar":"~3.0.9", "expo-secure-store":"~15.0.0",
+    "expo-file-system":"~19.0.24", "expo-sharing":"~14.0.8",
+    "expo-image-picker":"~17.0.11", "expo-linear-gradient":"~15.0.8",
+    "expo-crypto":"~15.0.8", "@react-native-async-storage/async-storage":"2.2.0",
+    "react-native-safe-area-context":"~5.6.0"
+  },
+  "devDependencies":{"@babel/core":"^7.25.2","@babel/parser":"^7.25.0","babel-preset-expo":"~54.0.10"}
+}
