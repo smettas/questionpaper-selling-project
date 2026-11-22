@@ -181,7 +181,7 @@ def download(request):
         last_number = details["start_number"] + total - 1
         if last_number > 9999:
             raise ValueError("The last question number must be 9999 or lower.")
-        if details["end_number"] is not None and details["end_number"] != last_number:
+        if not request.POST.get("studio_draft_id") and details["end_number"] is not None and details["end_number"] != last_number:
             raise ValueError(f"{total} questions starting at {details['start_number']} must end at {last_number}.")
         by_subject = {subject: [] for subject in Chapter.Subject.values}
         for pk in ids:

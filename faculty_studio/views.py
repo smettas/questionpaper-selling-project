@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from .models import Policy,Profile,Pattern,Draft,Practice,Paper,Recharge,Ledger
-from .core import validate,allocate,scoped,allowed_wallet,balance,reward_attempt,integer,TYPES
+from .core import validate,allocate,generate_questions,scoped,allowed_wallet,balance,reward_attempt,integer,TYPES
 
 def fail(message,status=400):return JsonResponse({'error':str(message)},status=status)
 
@@ -96,7 +96,7 @@ def api(request,action):
         if action in ('login','register'):return account(request,data,action=='register')
         try:request.user=user_for(request)
         except ValueError as exc:return fail(exc,401)
-        methods={'dashboard':'GET','patterns':'GET','pattern-save':'POST','pattern-delete':'POST','generate':'POST','draft':'GET','replace':'POST','preview':'POST','practice-start':'POST','practice-view':'GET','practice-submit':'POST','paper-files':'GET','recharge':'POST','catalog':'GET','usage-report':'GET','availability':'POST'}
+        methods={'dashboard':'GET','patterns':'GET','pattern-save':'POST','pattern-delete':'POST','generate':'POST','draft':'GET','replace':'POST','preview':'POST','practice-start':'POST','practice-view':'GET','practice-submit':'POST','paper-files':'GET','recharge':'POST','catalog':'GET','usage-report':'GET','availability':'POST','preview-batch':'POST'}
         if action not in methods:return fail('Unknown action.',404)
         if methods[action]!=request.method:return fail('Method not allowed.',405)
         user=request.user
@@ -137,12 +137,12 @@ def api(request,action):
             spec=validate(data.get('spec'));result=[]
             from collections import Counter
             for s in spec['sections']:
-                requested=Counter(s['slots'])
+                requested=Counter(['any']*len(s['slots']) if s.get('format_mode')=='automatic' else s['slots'])
                 result.append({'label':s['label'],'types':[{'type':k,'label':label,'available':scoped(s,k).count(),'requested':requested[k]} for k,label in TYPES.items()]})
             return JsonResponse({'sections':result})
         if action=='generate':
             limited(request,'generate:'+str(user.pk),60)
-            spec=validate(data.get('spec'));chosen=allocate(spec)
+            spec=validate(data.get('spec'));spec,chosen=generate_questions(spec)
             obj=Draft.objects.create(owner=user,name=str(data.get('name','Custom pattern'))[:120],spec=spec,question_ids=chosen)
             return JsonResponse(draft_json(obj))
         if action=='draft':
@@ -161,6 +161,17 @@ def api(request,action):
                 from random import SystemRandom
                 ids=d.question_ids.copy();ids[pos]=SystemRandom().choice(available);d.question_ids=ids;d.save(update_fields=['question_ids'])
             return JsonResponse(draft_json(d))
+        if action=='preview-batch':
+            from native_api.views import serialize
+            from question_bank.models import Question
+            wanted=data.get('ids',[])
+            if not isinstance(wanted,list) or not 1<=len(wanted)<=12 or any(type(pk) is not int or pk<1 for pk in wanted):raise ValueError('Request 1–12 question previews.')
+            rows=Question.objects.filter(pk__in=wanted,active=True).select_related('subtopic__chapter').in_bulk();questions=[];failed=[]
+            for pk in dict.fromkeys(wanted):
+                if pk not in rows:failed.append({'id':pk,'error':'Question is no longer available.'});continue
+                try:questions.append(serialize(rows[pk]))
+                except (ValueError,TypeError,KeyError,RuntimeError):failed.append({'id':pk,'error':'Preview could not load. Retry or replace this question.'})
+            return JsonResponse({'questions':questions,'failed':failed})
         if action=='preview':
             from native_api.views import serialize
             from question_bank.models import Question
@@ -172,7 +183,7 @@ def api(request,action):
             limited(request,'practice:'+str(user.pk),30)
             spec=validate(data.get('spec'))
             if spec['total']>100:raise ValueError('Practice supports up to 100 questions.')
-            chosen=allocate(spec)
+            spec,chosen=generate_questions(spec)
             from question_bank.models import Question
             keys={str(q.pk):q.correct_option for q in Question.objects.filter(pk__in=chosen)}
             obj=Practice.objects.create(owner=user,question_ids=chosen,answer_key=keys)

@@ -18,7 +18,7 @@ def validate(spec,require_scope=True):
     if not isinstance(spec,dict):raise ValueError('Choose a pattern.')
     sections=spec.get('sections',[])
     if not isinstance(sections,list) or not 1<=len(sections)<=8:raise ValueError('Use 1–8 sections.')
-    clean=[];total=0
+    clean=[];total=0;previous_end=0
     for s in sections:
         if not isinstance(s,dict):raise ValueError('Invalid section.')
         subject=s.get('subject');label=str(s.get('label') or '').strip()[:80] or {'physics':'Physics','chemistry':'Chemistry','biology':'Biology'}.get(subject,'');slots=s.get('slots')
@@ -32,8 +32,16 @@ def validate(spec,require_scope=True):
         if topics and Subtopic.objects.filter(pk__in=topics,chapter_id__in=chapters).count()!=len(set(topics)):raise ValueError('A topic belongs to another chapter.')
         difficulty=s.get('difficulty','')
         if difficulty not in ('','easy','moderate','hard'):raise ValueError('Invalid difficulty.')
-        total+=len(slots)
-        clean.append({'label':label,'subject':subject,'chapters':chapters,'topics':list(dict.fromkeys(topics)),'difficulty':difficulty,'slots':slots})
+        mode=s.get('format_mode','manual')
+        if mode not in ('manual','automatic'):raise ValueError('Choose manual types or automatic mix.')
+        raw_start=s.get('start_number');numbering=s.get('numbering','auto' if raw_start in (None,'') else 'explicit')
+        if numbering not in ('auto','explicit'):raise ValueError('Invalid numbering mode.')
+        start=previous_end+1 if numbering=='auto' else integer(raw_start,1,9999,'Starting question number')
+        end=start+len(slots)-1
+        if start<=previous_end:raise ValueError(f'{label}: start after question {previous_end} to avoid overlapping numbers.')
+        if end>9999:raise ValueError('The last question number must be 9999 or lower.')
+        previous_end=end;total+=len(slots)
+        clean.append({'label':label,'subject':subject,'chapters':chapters,'topics':list(dict.fromkeys(topics)),'difficulty':difficulty,'slots':slots,'format_mode':mode,'start_number':start,'numbering':numbering})
     if total>300:raise ValueError('A paper can contain at most 300 questions.')
     return {'sections':clean,'total':total}
 
@@ -51,16 +59,20 @@ def allocate(spec,exclude=()):
     # Constrained slots first: 'any' can never consume a question needed by a rare format.
     jobs=[];offset=0
     for s in spec['sections']:
-        for i,k in enumerate(s['slots']):jobs.append((offset+i,s,k))
+        for i,k in enumerate(s['slots']):jobs.append((offset+i,s,k,s.get('_preferences',[None]*len(s['slots']))[i]))
         offset+=len(s['slots'])
     pools={};ordered=[]
-    for pos,s,k in jobs:
-        key=json.dumps([s,k],sort_keys=True)
-        if key not in pools:pools[key]=list(scoped(s,k).exclude(pk__in=exclude).values_list('pk',flat=True))
+    for pos,s,k,preferred in jobs:
+        key=json.dumps([s,k,preferred],sort_keys=True)
+        if key not in pools:
+            pool=list(scoped(s,k).exclude(pk__in=exclude).values_list('pk',flat=True));rng.shuffle(pool)
+            if preferred:
+                favourites=set(scoped(s,preferred).values_list('pk',flat=True))
+                pool=[pk for pk in pool if pk in favourites]+[pk for pk in pool if pk not in favourites]
+            pools[key]=pool
         ordered.append((pos,s,k,key))
     # Bipartite matching prevents overlapping scopes or any-format slots causing false shortages.
     owner={};assigned={}
-    for pool in pools.values():rng.shuffle(pool)
     def place(job,visited):
         for pk in pools[job[3]]:
             if pk in visited:continue
@@ -71,6 +83,27 @@ def allocate(spec,exclude=()):
     for job in sorted(ordered,key=lambda j:len(pools[j[3]])):
         if not place(job,set()):raise ValueError(f"Not enough distinct {TYPES[job[2]]} questions for {job[1]['label']}. Change its scope or slot types.")
     return [assigned[i] for i in range(spec['total'])]
+
+
+def generate_questions(spec):
+    import copy
+    prepared=copy.deepcopy(spec)
+    # A varied preference order, with all scoped questions as fallback. These are
+    # product mix preferences, not a claimed official NEET format quota.
+    cycle=['mcq','statement','assertion-reason','mcq','matching','diagram','statement','mcq','graph','mcq']
+    for s in prepared['sections']:
+        if s.get('format_mode')=='automatic':
+            count=len(s['slots']);available=[k for k in TYPES if k!='any' and scoped(s,k).exists()]
+            seed=available[:count];rest=[k for k in cycle if k in available] or ['any']
+            preferences=seed+[rest[i%len(rest)] for i in range(max(0,count-len(seed)))];rng.shuffle(preferences)
+            s['_preferences']=preferences;s['slots']=['any']*count
+    chosen=allocate(prepared)
+    rows=Question.objects.filter(pk__in=chosen).in_bulk();offset=0
+    for s in prepared['sections']:
+        if s.get('format_mode')=='automatic':
+            s['slots']=[rows[pk].question_visual or rows[pk].question_kind for pk in chosen[offset:offset+len(s['slots'])]]
+        offset+=len(s['slots']);s.pop('_preferences',None)
+    return prepared,chosen
 
 def allowed_wallet(user,which='personal'):
     if which in ('personal','',None):return Wallet.objects.get_or_create(user=user)[0]

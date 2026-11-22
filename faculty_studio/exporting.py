@@ -21,12 +21,19 @@ def prepare_sections(request,details,ids,rows,selected):
     if not value:return details,selected
     draft=Draft.objects.filter(pk=value,owner=request.user).first()
     if not draft or ids!=draft.question_ids:raise ValueError('This selection no longer matches your saved pattern draft. Reload it.')
-    offset=0;sections=[]
+    offset=0;sections=[];starts=[];previous_end=0;coverage=[]
     for s in draft.spec['sections']:
         subset=ids[offset:offset+len(s['slots'])];offset+=len(subset)
         for pk,kind in zip(subset,s['slots']):
             if not scoped(s,kind).filter(pk=pk).exists():raise ValueError('A slot no longer matches the saved pattern. Replace it before generating.')
+        start=s.get('start_number',previous_end+1)
+        if type(start) is not int or start<=previous_end or start+len(subset)-1>9999:raise ValueError('Invalid or overlapping section numbering.')
+        previous_end=start+len(subset)-1;starts.append(start)
         sections.append((s['label'],[rows[pk] for pk in subset]))
+        names=list(dict.fromkeys(rows[pk].subtopic.chapter.name for pk in subset))
+        coverage.append(f"{s['label']} (Q{start}–{previous_end}): "+'; '.join(names))
+    if details.get('end_number') is not None and details['end_number']!=previous_end:raise ValueError(f'This paper ends at question {previous_end}.')
+    details={**details,'start_number':starts[0],'section_starts':starts,'covered_chapters':coverage}
     return details,sections
 
 def meter_export(view):

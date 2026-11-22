@@ -119,7 +119,9 @@ def build_pdf(details, sections, *, answer_key=False, preview=False, mode=None):
                 flow.append(FrameBreak)
         answer_key = is_answer
         number = details["start_number"] - 1
-        for subject, questions in sections:
+        for section_index, (subject, questions) in enumerate(sections):
+            if details.get("section_starts"):
+                number = details["section_starts"][section_index] - 1
             heading = Paragraph(subject.upper(), subject_label)
             if answer_key and any(question.hint or question.structured for question in questions):
                 for index, question in enumerate(questions):

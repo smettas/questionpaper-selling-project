@@ -264,7 +264,9 @@ def build_word(details, sections, mode):
             if two:
                 column_section(WD_SECTION_START.CONTINUOUS, 2)
         number = details["start_number"]
-        for subject, questions in sections:
+        for section_index, (subject, questions) in enumerate(sections):
+            if details.get("section_starts"):
+                number = details["section_starts"][section_index] - 0
             heading = doc.add_heading(subject.upper(), level=2)
             heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for question in questions:
