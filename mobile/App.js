@@ -1,7 +1,9 @@
+// OJAS_KEYBOARD_SCROLL
+import {KeyboardScroll as ScrollView} from './src/KeyboardScroll';
 // OJAS_FACULTY_HUB
 import {FacultyHub,FacultyRegister,confirmCharge} from './src/FacultyHub';
 import React,{useState,useEffect,useRef} from 'react';
-import {View,Text,ScrollView,FlatList,Pressable,Modal,Alert,ActivityIndicator,KeyboardAvoidingView,Platform,AppState,Image} from 'react-native';
+import {View,Text,FlatList,Pressable,Modal,Alert,ActivityIndicator,KeyboardAvoidingView,Platform,AppState,Image} from 'react-native';
 import {SafeAreaProvider,SafeAreaView} from 'react-native-safe-area-context';
 import {StatusBar} from 'expo-status-bar';
 import {LinearGradient} from 'expo-linear-gradient';
@@ -157,4 +159,4 @@ function Login({onLogin,onOffline}){
 }
 function OfflineFiles({onBack}){const[rows,setRows]=useState([]),[error,setError]=useState('');useEffect(()=>{listFiles().then(setRows).catch(e=>setError(e.message));},[]);return <SafeAreaView style={{flex:1,backgroundColor:colors.bg}}><ScrollView contentContainerStyle={{padding:18}}><Button title="Back to sign in" onPress={onBack}/><Text style={styles.title}>Saved papers · offline</Text>{!!error&&<Text style={styles.text}>{error}</Text>}{rows.map(f=><View key={f.id} style={styles.card}><Text style={styles.text}>{f.name}</Text><Button title="Open / Share" onPress={()=>shareFile(f).catch(e=>setError(e.message))}/><Button title="Save copy" onPress={()=>saveCopy(f).catch(e=>setError(e.message))}/></View>)}{!rows.length&&<Text style={styles.muted}>No saved papers on this device.</Text>}</ScrollView></SafeAreaView>;}
 function Root(){const[showBuilder,setShowBuilder]=useState(false);const[ready,setReady]=useState(false),[name,setName]=useState(null),[offline,setOffline]=useState(false);useEffect(()=>{let active=true;setUnauthorized(()=>{logout().catch(()=>{});setShowBuilder(false);setName(null);});(async()=>{try{if(await restoreToken()){const r=await api('me');setFileOwner(r.account_id);if(active)setName(r);}}catch{}finally{if(active)setReady(true);}})();return()=>{active=false;setUnauthorized(()=>{});};},[]);if(offline)return <OfflineFiles onBack={()=>setOffline(false)}/>;if(!ready)return <SafeAreaView style={{flex:1,justifyContent:'center'}}><ActivityIndicator size="large" color={colors.teal}/></SafeAreaView>;return name?(showBuilder?<Workspace key={name.account_id} name={name.name} accountId={name.account_id} onDashboard={()=>setShowBuilder(false)} onLogout={async()=>{await logout();setShowBuilder(false);setName(null);}}/>:<FacultyHub key={name.account_id} name={name.name} onBuilder={()=>setShowBuilder(true)} onLogout={async()=>{await logout();setShowBuilder(false);setName(null);}}/>):<Login onLogin={setName} onOffline={()=>setOffline(true)}/>;}
-export default function App(){return <SafeAreaProvider><Root/></SafeAreaProvider>;}
+export default function App(){return <SafeAreaProvider><StatusBar style="dark"/><Root/></SafeAreaProvider>;}

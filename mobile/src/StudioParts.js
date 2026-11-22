@@ -1,5 +1,7 @@
+// OJAS_KEYBOARD_SCROLL
+import {KeyboardScroll as ScrollView} from './KeyboardScroll';
 import React,{useState,useEffect} from 'react';
-import {View,Text,Pressable,Modal,ScrollView,TextInput} from 'react-native';
+import {View,Text,Pressable,Modal,TextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Button,Check,styles,colors} from './ui';
 const{chooseChapter,toggleId}=require('./domain.cjs');

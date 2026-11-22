@@ -4,7 +4,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.core import signing
-from django.db import transaction,IntegrityError
+from django.db import transaction,IntegrityError,DatabaseError
+import logging
+logger=logging.getLogger(__name__)
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render,redirect
@@ -42,10 +44,12 @@ def account(request,data,register=False):
     if request.method!='POST':return fail('POST required.',405)
     limited(request,'register' if register else 'login',10 if register else 30,900)
     username=data.get('username','');password=data.get('password','')
+    if isinstance(username,str):username=username.strip()
     if not isinstance(username,str) or not isinstance(password,str) or not 3<=len(username)<=150 or len(password)>128:raise ValueError('Enter a username (3–150 characters) and password.')
     if register:
         if not Policy.current().registration_open:raise ValueError('Registration is currently closed. Contact the academy.')
         name=data.get('name','');email=data.get('email','');academy=data.get('academy','')
+        if isinstance(email,str):email=email.strip()
         if not all(isinstance(v,str) for v in [name,email,academy]) or not 2<=len(name.strip())<=150 or len(academy)>150:raise ValueError('Enter your name and academy (optional).')
         from django.core.validators import validate_email
         from django.contrib.auth.validators import UnicodeUsernameValidator
@@ -61,7 +65,10 @@ def account(request,data,register=False):
     else:
         user=authenticate(request,username=username,password=password)
         if not user or not user.is_active:return fail('Incorrect username or password.',401)
-    session_login(request,user)
+    # Native requests use bearer tokens; do not create a redundant browser session.
+    if not request.path.startswith('/api/mobile/'):
+        from django.conf import settings
+        session_login(request,user,backend=getattr(user,'backend',settings.AUTHENTICATION_BACKENDS[0]))
     from native_api.views import AUTH_SALT,MAX_AGE
     token=signing.dumps({'uid':user.pk,'auth':user.get_session_auth_hash()},salt=AUTH_SALT)
     return JsonResponse({'name':user.get_full_name() or user.username,'account_id':user.pk,'token':token,'expires_in':MAX_AGE})
@@ -200,3 +207,17 @@ def api(request,action):
             obj,created=Recharge.objects.get_or_create(user=user,reference=ref,defaults={'wallet':wallet,'rupees':rupees,'credits':credits})
             return JsonResponse({'id':obj.pk,'status':obj.status,'message':'Request recorded. Credits are added only after admin verifies and approves payment.'})
     except (ValueError,TypeError,KeyError,ValidationError,Practice.DoesNotExist) as exc:return fail('; '.join(exc.messages) if isinstance(exc,ValidationError) else exc)
+
+# OJAS_REGISTRATION_DIAGNOSTICS
+_original_api=api
+@never_cache
+def api(request,action):
+    try:
+        return _original_api(request,action)
+    except DatabaseError:
+        logger.exception('Faculty studio database failure; action=%s',action)
+        return JsonResponse({'error':'The account service database is not ready. Ask the administrator to run migrations and studio_healthcheck.','code':'STUDIO_DATABASE_NOT_READY'},status=503)
+    except Exception:
+        reference=uuid.uuid4().hex[:10]
+        logger.exception('Faculty studio server error; reference=%s action=%s',reference,action)
+        return JsonResponse({'error':'The account service could not finish this request. If you already submitted registration, try signing in before registering again. Support reference: '+reference,'code':'STUDIO_SERVER_ERROR','reference':reference},status=500)
