@@ -1,0 +1,8 @@
+const{test}=require('node:test'),assert=require('node:assert/strict');const{freshSection,ranges,resizeSlots,applyRange,buildSpec,browseWindow}=require('../src/patternTools.cjs');
+test('section dropdown derives section names and bank subjects',()=>{assert.equal(freshSection('chemistry').label,'Chemistry');assert.equal(freshSection('botany').subject,'biology');assert.equal(freshSection('zoology').label,'Zoology');});
+test('40 questions in four sections have continuous numbers',()=>{assert.deepEqual(ranges([freshSection(),freshSection('chemistry'),freshSection('botany'),freshSection('zoology')]).map(r=>[r.start,r.end]),[[1,10],[11,20],[21,30],[31,40]]);});
+test('a second-section range uses displayed global question numbers',()=>{const s=applyRange([freshSection(),freshSection('chemistry')],1,'16','16','assertion-reason');assert.equal(s[1].slots[5],'assertion-reason');assert.equal(s[0].slots[5],'mcq');});
+test('zero, reversed and out-of-section ranges are rejected',()=>{for(const [a,b] of [[1,0],[5,2],[0,5],[1,11]])assert.throws(()=>applyRange([freshSection()],0,a,b,'mcq'));});
+test('patterns may save before syllabus, but generation cannot',()=>{assert.equal(buildSpec([freshSection()],false).sections.length,1);assert.throws(()=>buildSpec([freshSection()],true),/chapters/);});
+test('empty or invalid count edits cannot silently save the old count',()=>{assert.throws(()=>buildSpec([freshSection()],false,{0:''}),/count/);assert.throws(()=>resizeSlots([],0));assert.throws(()=>resizeSlots([],3.5));});
+test('bank pages are calculated from every matching record, not the local batch',()=>{assert.deepEqual(browseWindow(2,6,42),{start:7,end:12,pages:7,hasPrevious:true,hasNext:true});assert.equal(browseWindow(7,6,42).hasNext,false);});

@@ -14,19 +14,20 @@ def integer(x,low,high,label):
     if type(x) is not int or not low<=x<=high:raise ValueError(f'{label} must be {low}–{high}.')
     return x
 
-def validate(spec):
+def validate(spec,require_scope=True):
     if not isinstance(spec,dict):raise ValueError('Choose a pattern.')
     sections=spec.get('sections',[])
     if not isinstance(sections,list) or not 1<=len(sections)<=8:raise ValueError('Use 1–8 sections.')
     clean=[];total=0
     for s in sections:
         if not isinstance(s,dict):raise ValueError('Invalid section.')
-        subject=s.get('subject');label=str(s.get('label','')).strip()[:80];slots=s.get('slots')
+        subject=s.get('subject');label=str(s.get('label') or '').strip()[:80] or {'physics':'Physics','chemistry':'Chemistry','biology':'Biology'}.get(subject,'');slots=s.get('slots')
         if subject not in Chapter.Subject.values or not label:raise ValueError('Choose a subject and section name.')
         if not isinstance(slots,list) or not 1<=len(slots)<=300 or any(k not in TYPES for k in slots):raise ValueError('Assign a valid type to every position.')
         chapters=s.get('chapters',[]);topics=s.get('topics',[])
         if not isinstance(chapters,list) or not isinstance(topics,list) or any(type(x) is not int or x<=0 for x in chapters+topics):raise ValueError('Invalid syllabus selection.')
-        if not chapters or len(chapters)>150 or len(set(chapters))!=len(chapters):raise ValueError('Select chapters for every section.')
+        if require_scope and not chapters:raise ValueError(f'{label}: choose the covered chapters before generating questions.')
+        if len(chapters)>150 or len(set(chapters))!=len(chapters):raise ValueError('Invalid chapter selection.')
         if Chapter.objects.filter(pk__in=chapters,subject=subject).count()!=len(chapters):raise ValueError('A chapter belongs to another subject.')
         if topics and Subtopic.objects.filter(pk__in=topics,chapter_id__in=chapters).count()!=len(set(topics)):raise ValueError('A topic belongs to another chapter.')
         difficulty=s.get('difficulty','')

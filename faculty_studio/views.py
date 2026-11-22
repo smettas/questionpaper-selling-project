@@ -122,7 +122,7 @@ def api(request,action):
             return JsonResponse({'name':user.get_full_name() or user.username,'wallets':wallets,'price':p.credits_per_question,'paise_per_credit':p.paise_per_credit,'practice_per_correct':p.practice_per_correct,'practice_daily_cap':p.practice_daily_cap,'valid_days':p.credit_valid_days,'low_balance':p.low_balance,'staff_free':bool(user.is_staff and p.staff_free),'papers':list(Paper.objects.filter(owner=user).order_by('-pk').values('id','title','count','charged','created_at')[:30]),'ledger':list(Ledger.objects.filter(wallet=personal).order_by('-pk').values('amount','reason','created_at')[:40]),'recharges':list(Recharge.objects.filter(user=user).order_by('-pk').values('id','rupees','credits','status','created_at')[:20]),'practice':list(Practice.objects.filter(owner=user,submitted=True).order_by('-submitted_at').values('id','score','reward','submitted_at')[:20])})
         if action=='patterns':return JsonResponse({'patterns':list(Pattern.objects.filter(owner=user).order_by('-updated_at').values('id','name','spec'))})
         if action=='pattern-save':
-            spec=validate(data.get('spec'));name=str(data.get('name','')).strip()
+            spec=validate(data.get('spec'),require_scope=False);name=str(data.get('name','')).strip()
             if not 1<=len(name)<=120:raise ValueError('Name your pattern (1–120 characters).')
             obj=Pattern.objects.filter(pk=data.get('id'),owner=user).first() if data.get('id') else None
             if data.get('id') and not obj:return fail('Pattern not found.',404)

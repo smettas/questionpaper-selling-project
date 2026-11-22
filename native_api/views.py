@@ -151,11 +151,13 @@ def endpoint(request,action):
             data={key:request.GET.get(key,'') for key in ('subject','difficulty','question_type')}
             data['chapters']=request.GET.getlist('chapters');data['topics']=request.GET.getlist('topics')
             query=syllabus.query_for(data).select_related('subtopic__chapter').order_by('pk')
-            page=Paginator(query,12).get_page(request.GET.get('page',1))
+            size=request.GET.get('page_size','12')
+            if size not in ('6','12','24'):raise ValueError('Choose a page size of 6, 12 or 24.')
+            page=Paginator(query,int(size)).get_page(request.GET.get('page',1))
             questions=[]
             for row in page:
                 questions.append({'id':row.pk,'subject':row.subtopic.chapter.get_subject_display(),'chapter':row.subtopic.chapter.name,'chapter_id':row.subtopic.chapter_id,'topic_id':row.subtopic_id,'subtopic':row.subtopic.name,'difficulty':row.difficulty,'kind':row.question_kind,'visual':row.question_visual,'level':row.subtopic.chapter.level})
-            return JsonResponse({'questions':questions,'page':page.number,'pages':page.paginator.num_pages,'count':page.paginator.count})
+            return JsonResponse({'questions':questions,'page':page.number,'pages':page.paginator.num_pages,'count':page.paginator.count,'page_size':int(size)})
         if action=='sample':return delegate(request,syllabus.sample)
         if action=='details':
             wanted=syllabus.ids(body(request).get('ids',[]),'question',12)
