@@ -27,6 +27,7 @@ if ON_RAILWAY:
         raise ImproperlyConfigured("Missing Railway variables: " + ", ".join(missing))
 ROOT_URLCONF = "config.urls"
 INSTALLED_APPS = [
+    'faculty_studio',
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "question_bank", "paper_builder",
@@ -83,3 +84,12 @@ if os.getenv("R2_BUCKET_NAME"):
         },
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     }
+
+# OJAS_FACULTY_SETTINGS
+MIDDLEWARE.append('faculty_studio.middleware.AccountGate')
+AUTH_PASSWORD_VALIDATORS = [
+ {'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator','OPTIONS':{'min_length':10}},
+ {'NAME':'django.contrib.auth.password_validation.CommonPasswordValidator'},
+ {'NAME':'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+ {'NAME':'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]

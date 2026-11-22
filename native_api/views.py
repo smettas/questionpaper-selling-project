@@ -36,7 +36,7 @@ def auth_user(request):
     if not header.startswith('Bearer ') or len(header)>4096:raise ValueError('Please sign in again.')
     try:
         data=signing.loads(header[7:],salt=AUTH_SALT,max_age=MAX_AGE)
-        user=get_user_model().objects.get(pk=data['uid'],is_active=True,is_staff=True)
+        user=get_user_model().objects.get(pk=data['uid'],is_active=True)
         if not constant_time_compare(data.get('auth',''),user.get_session_auth_hash()):raise ValueError()
         return user
     except (signing.BadSignature,KeyError,TypeError,ValueError,get_user_model().DoesNotExist):
@@ -54,7 +54,7 @@ def login(request):
         if attempts>=15:return fail('Too many sign-in attempts. Wait 15 minutes.',429)
         cache.set(bucket,attempts+1,900)
         user=authenticate(request,username=username,password=password)
-        if not user or not user.is_active or not user.is_staff:return fail('Invalid credentials or account is not enabled for staff access.',401)
+        if not user or not user.is_active:return fail('Invalid username or password.',401)
         cache.delete(bucket)
         token=signing.dumps({'uid':user.pk,'auth':user.get_session_auth_hash()},salt=AUTH_SALT)
         return JsonResponse({'token':token,'expires_in':MAX_AGE,'name':user.get_full_name() or user.get_username(),'account_id':user.pk})
@@ -133,6 +133,10 @@ def ticket(request,value):
 @csrf_exempt
 @never_cache
 def endpoint(request,action):
+    # OJAS_FACULTY_API
+    if action.startswith('studio-'):
+        from faculty_studio.views import api
+        return api(request, action[7:])
     try:request.user=auth_user(request)
     except ValueError as exc:return fail(str(exc),401)
     methods={'catalog':'GET','browse':'GET','counts':'GET','sample':'POST','details':'POST','generate':'POST','replace':'POST','report':'POST','export':'POST','me':'GET'}

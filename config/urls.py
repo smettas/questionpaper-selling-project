@@ -20,6 +20,7 @@ def health(request):
 
 
 urlpatterns = [
+    path('studio/', include('faculty_studio.urls')),
     # OJAS_NATIVE_API_V1
     path('api/mobile/v1/', include('native_api.urls')),
     path("test-patterns/", include("test_patterns.urls", namespace="test_patterns")),

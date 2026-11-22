@@ -140,7 +140,11 @@ def question_asset(request, pk, kind):
     return FileResponse(asset.open("rb"), content_type="image/webp")
 
 
+# OJAS_FACULTY_EXPORT
+from faculty_studio.exporting import meter_export
+
 @require_POST
+@meter_export
 def download(request):
     form = PaperDetails(request.POST)
     if not form.is_valid():
@@ -188,6 +192,8 @@ def download(request):
         # OJAS_TEST_PATTERN_EXPORT
         from test_patterns.exporting import prepare_export
         details, selected = prepare_export(request, details, ids, rows, selected)
+        from faculty_studio.exporting import prepare_sections
+        details, selected = prepare_sections(request, details, ids, rows, selected)
     except (ValueError, TypeError) as exc:
         return HttpResponse(str(exc), status=400, content_type="text/plain")
 
