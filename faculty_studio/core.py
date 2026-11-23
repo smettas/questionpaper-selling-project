@@ -143,11 +143,50 @@ def reward_attempt(user,attempt_id,answers):
         correct=[pk for pk in attempt.question_ids if answers.get(str(pk))==attempt.answer_key[str(pk)]]
         policy=Policy.current();today=timezone.localdate()
         used=Practice.objects.filter(owner=user,submitted_at__date=today).aggregate(n=Sum('reward'))['n'] or 0
-        available=max(0,policy.practice_daily_cap-used);earned=0
+        available=max(0,policy.practice_daily_cap-used)
+        profile,_=Profile.objects.get_or_create(user=user)
+        new_correct=0
         for pk in correct:
-            first=not RewardedQuestion.objects.filter(owner=user,question_id=pk).exists()
-            if first:RewardedQuestion.objects.create(owner=user,question_id=pk)
-            if first:earned+=min(policy.practice_per_correct,max(0,available-earned))
+            if not RewardedQuestion.objects.filter(owner=user,question_id=pk).exists():
+                RewardedQuestion.objects.create(owner=user,question_id=pk);new_correct+=1
+        required=max(1,policy.practice_correct_per_credit)
+        # Only capped daily earnings are payable; retain the fractional remainder,
+        # not a stockpile of credits that bypasses the next day's limit.
+        groups,remainder=divmod(profile.practice_progress+new_correct,required)
+        earned=min(groups,available)
+        profile.practice_progress=remainder;profile.save(update_fields=['practice_progress'])
         if earned:credit(wallet,user,earned,'Practice reward','practice:'+str(attempt.pk))
         attempt.answers=answers;attempt.score=len(correct);attempt.reward=earned;attempt.submitted=True;attempt.submitted_at=timezone.now();attempt.save()
         return attempt
+
+
+def award_welcome(user,actor=None):
+    from .models import WelcomeClaim
+    email=user.email.strip().casefold() or None
+    wallet=allowed_wallet(user)
+    with transaction.atomic():
+        Policy.current();policy=Policy.objects.select_for_update().get(pk=1)
+        Wallet.objects.select_for_update().get(pk=wallet.pk)
+        if WelcomeClaim.objects.filter(user=user).exists():return False
+        if email and WelcomeClaim.objects.filter(email=email).exists():raise ValueError('Welcome credits were already claimed for this email.')
+        WelcomeClaim.objects.create(user=user,email=email)
+        if policy.welcome_credits:credit(wallet,actor or user,policy.welcome_credits,'Welcome credits','welcome:'+str(user.pk))
+        return True
+
+
+def adjust_wallet(wallet,actor,delta,reason,reference):
+    if not actor.is_superuser:raise PermissionError('Only superusers can adjust credits.')
+    if type(delta) is not int or not delta or abs(delta)>1000000:raise ValueError('Enter a non-zero adjustment up to 1,000,000 credits.')
+    if not reason.strip():raise ValueError('Enter an adjustment reason.')
+    with transaction.atomic():
+        Wallet.objects.select_for_update().get(pk=wallet.pk)
+        old=Ledger.objects.filter(reference=reference).first()
+        if old:
+            if old.wallet_id!=wallet.pk or old.amount!=delta:raise ValueError('Adjustment reference has already been used.')
+            return False
+        label=('Admin adjustment: '+reason.strip())[:150]
+        if delta>0:credit(wallet,actor,delta,label,reference)
+        else:
+            debit_locked(wallet,actor,-delta,reference)
+            Ledger.objects.filter(reference=reference).update(reason=label)
+        return True

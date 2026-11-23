@@ -7,6 +7,8 @@ class Policy(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
     credits_per_question = models.PositiveSmallIntegerField(default=1)
     paise_per_credit = models.PositiveSmallIntegerField(default=10)
+    practice_correct_per_credit = models.PositiveSmallIntegerField(default=5)
+    welcome_credits = models.PositiveIntegerField(default=50)
     practice_per_correct = models.PositiveSmallIntegerField(default=1)
     practice_daily_cap = models.PositiveSmallIntegerField(default=20)
     credit_valid_days = models.PositiveSmallIntegerField(default=365)
@@ -27,6 +29,7 @@ class Institution(models.Model):
 
 class Profile(models.Model):
     user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE)
+    practice_progress=models.PositiveSmallIntegerField(default=0)
     academy=models.CharField(max_length=150,blank=True)
     institution=models.ForeignKey(Institution,null=True,blank=True,on_delete=models.SET_NULL)
     def __str__(self):return self.user.get_username()
@@ -122,4 +125,9 @@ class Promotion(models.Model):
     credits=models.PositiveIntegerField()
     reason=models.CharField(max_length=150)
     created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,editable=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+
+class WelcomeClaim(models.Model):
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.PROTECT)
+    email=models.CharField(max_length=254,unique=True,null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True)

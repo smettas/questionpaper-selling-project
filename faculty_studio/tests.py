@@ -21,7 +21,9 @@ class StudioTests(TestCase):
             i=len(self.q);self.q.append(Question.objects.create(subtopic=self.topic,difficulty='easy',correct_option=2,question_kind=k,fingerprint='fp'+str(i),structured={'diagrams':[],'type':k,'stem':'Question '+str(i),'options':['A','B','C','D'],'hint':'Reason'}))
         self.wallet=allowed_wallet(self.user)
     def spec(self,slots=None):return {'sections':[{'label':'Physics','subject':'physics','chapters':[self.chapter.pk],'topics':[],'difficulty':'','slots':slots or ['mcq']*5+['assertion-reason','statement','matching']}]}
-    def post(self,action,data):return self.client.post('/studio/api/'+action+'/',json.dumps(data),content_type='application/json')
+    def post(self,action,data):
+        if action=='register':data.setdefault('email',data.get('username','test')+'@example.com')
+        return self.client.post('/studio/api/'+action+'/',json.dumps(data),content_type='application/json')
     def fund(self,n=100):credit(self.wallet,self.user,n,'Test funding','fund:'+str(Grant.objects.count()))
     def test_registration_nonstaff_hashed_password(self):
         self.client.logout();r=self.post('register',{'username':'newteacher','name':'New Teacher','academy':'OJAS','password':'SecretLongValue42!'})
@@ -58,11 +60,11 @@ class StudioTests(TestCase):
         t=self.post('practice-start',{'spec':self.spec()}).json();v=self.client.get('/studio/api/practice-view/',{'id':t['id']}).json();self.assertNotIn('answer',v['question']);self.assertNotIn('hint_blocks',v['question'])
     def test_reward_once_and_submission_idempotent(self):
         t=self.post('practice-start',{'spec':self.spec()}).json();obj=Practice.objects.get(pk=t['id']);answers={str(pk):2 for pk in obj.question_ids}
-        r=self.post('practice-submit',{'id':t['id'],'answers':answers});self.assertEqual(r.json()['reward'],8);self.assertEqual(balance(self.wallet),8)
-        self.assertEqual(self.post('practice-submit',{'id':t['id'],'answers':answers}).json()['reward'],8);self.assertEqual(balance(self.wallet),8)
-        t2=self.post('practice-start',{'spec':self.spec()}).json();o2=Practice.objects.get(pk=t2['id']);self.post('practice-submit',{'id':t2['id'],'answers':{str(pk):2 for pk in o2.question_ids}});self.assertEqual(balance(self.wallet),len(RewardedQuestion.objects.filter(owner=self.user)))
+        r=self.post('practice-submit',{'id':t['id'],'answers':answers});self.assertEqual(r.json()['reward'],1);self.assertEqual(balance(self.wallet),1)
+        self.assertEqual(self.post('practice-submit',{'id':t['id'],'answers':answers}).json()['reward'],1);self.assertEqual(balance(self.wallet),1)
+        t2=self.post('practice-start',{'spec':self.spec()}).json();o2=Practice.objects.get(pk=t2['id']);self.post('practice-submit',{'id':t2['id'],'answers':{str(pk):2 for pk in o2.question_ids}});self.assertEqual(balance(self.wallet),len(RewardedQuestion.objects.filter(owner=self.user))//5)
     def test_reward_daily_cap(self):
-        p=Policy.current();p.practice_daily_cap=3;p.save();t=self.post('practice-start',{'spec':self.spec()}).json();o=Practice.objects.get(pk=t['id']);r=self.post('practice-submit',{'id':t['id'],'answers':{str(pk):2 for pk in o.question_ids}});self.assertEqual(r.json()['reward'],3)
+        p=Policy.current();p.practice_daily_cap=1;p.save();t=self.post('practice-start',{'spec':self.spec()}).json();o=Practice.objects.get(pk=t['id']);r=self.post('practice-submit',{'id':t['id'],'answers':{str(pk):2 for pk in o.question_ids}});self.assertEqual(r.json()['reward'],1)
     def test_other_user_cannot_submit_practice(self):
         t=self.post('practice-start',{'spec':self.spec()}).json();self.client.force_login(self.other);self.assertEqual(self.post('practice-submit',{'id':t['id'],'answers':{}}).status_code,400)
     def test_credit_expiry_and_idempotency(self):

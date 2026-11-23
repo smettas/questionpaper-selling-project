@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from .models import Policy,Profile,Pattern,Draft,Practice,Paper,Recharge,Ledger
-from .core import validate,allocate,generate_questions,scoped,allowed_wallet,balance,reward_attempt,integer,TYPES
+from .core import validate,allocate,generate_questions,scoped,allowed_wallet,balance,reward_attempt,integer,TYPES,award_welcome
 
 def fail(message,status=400):return JsonResponse({'error':str(message)},status=status)
 
@@ -54,14 +54,19 @@ def account(request,data,register=False):
         from django.core.validators import validate_email
         from django.contrib.auth.validators import UnicodeUsernameValidator
         UnicodeUsernameValidator()(username)
-        if email:validate_email(email)
+        email=email.casefold()
+        if not email:raise ValueError('Email is required. Use one account per email address.')
+        validate_email(email)
         if len(email)>254:raise ValueError('Email is too long.')
         user=get_user_model()(username=username,first_name=name.strip(),email=email)
         validate_password(password,user)
         try:
             with transaction.atomic():
-                user.set_password(password);user.save();Profile.objects.create(user=user,academy=academy.strip())
-        except IntegrityError:raise ValueError('That username is unavailable.')
+                Policy.current();Policy.objects.select_for_update().get(pk=1)
+                from .models import WelcomeClaim
+                if get_user_model().objects.filter(email__iexact=email).exists() or WelcomeClaim.objects.filter(email=email).exists():raise ValueError('This email already has an account. Sign in or contact your administrator.')
+                user.set_password(password);user.save();Profile.objects.create(user=user,academy=academy.strip());award_welcome(user)
+        except IntegrityError:raise ValueError('That username or email is already registered.')
     else:
         user=authenticate(request,username=username,password=password)
         if not user or not user.is_active:return fail('Incorrect username or password.',401)
@@ -119,7 +124,7 @@ def api(request,action):
             profile=Profile.objects.filter(user=user).select_related('institution').first()
             if profile and profile.institution:
                 w=allowed_wallet(user,profile.institution_id);wallets.append({'id':str(profile.institution_id),'label':profile.institution.name,'balance':balance(w)})
-            return JsonResponse({'name':user.get_full_name() or user.username,'wallets':wallets,'price':p.credits_per_question,'paise_per_credit':p.paise_per_credit,'practice_per_correct':p.practice_per_correct,'practice_daily_cap':p.practice_daily_cap,'valid_days':p.credit_valid_days,'low_balance':p.low_balance,'staff_free':bool(user.is_staff and p.staff_free),'papers':list(Paper.objects.filter(owner=user).order_by('-pk').values('id','title','count','charged','created_at')[:30]),'ledger':list(Ledger.objects.filter(wallet=personal).order_by('-pk').values('amount','reason','created_at')[:40]),'recharges':list(Recharge.objects.filter(user=user).order_by('-pk').values('id','rupees','credits','status','created_at')[:20]),'practice':list(Practice.objects.filter(owner=user,submitted=True).order_by('-submitted_at').values('id','score','reward','submitted_at')[:20])})
+            return JsonResponse({'name':user.get_full_name() or user.username,'wallets':wallets,'price':p.credits_per_question,'paise_per_credit':p.paise_per_credit,'practice_per_correct':0,'practice_correct_per_credit':p.practice_correct_per_credit,'practice_progress':Profile.objects.get_or_create(user=user)[0].practice_progress,'welcome_credits':p.welcome_credits,'practice_daily_cap':p.practice_daily_cap,'valid_days':p.credit_valid_days,'low_balance':p.low_balance,'staff_free':bool(user.is_staff and p.staff_free),'papers':list(Paper.objects.filter(owner=user).order_by('-pk').values('id','title','count','charged','created_at')[:30]),'ledger':list(Ledger.objects.filter(wallet=personal).order_by('-pk').values('amount','reason','created_at')[:40]),'recharges':list(Recharge.objects.filter(user=user).order_by('-pk').values('id','rupees','credits','status','created_at')[:20]),'practice':list(Practice.objects.filter(owner=user,submitted=True).order_by('-submitted_at').values('id','score','reward','submitted_at')[:20])})
         if action=='patterns':return JsonResponse({'patterns':list(Pattern.objects.filter(owner=user).order_by('-updated_at').values('id','name','spec'))})
         if action=='pattern-save':
             spec=validate(data.get('spec'),require_scope=False);name=str(data.get('name','')).strip()

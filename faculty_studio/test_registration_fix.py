@@ -11,7 +11,7 @@ from faculty_studio.models import Profile
 class RegistrationFixTests(TestCase):
     def setUp(self):cache.clear()
     def native(self,data):return self.client.post('/api/mobile/v1/studio-register/',json.dumps(data),content_type='application/json')
-    def valid(self):return {'name':'Teacher Test','username':'keyboardteacher','password':'LongFreshPass47!','email':'','academy':''}
+    def valid(self):return {'name':'Teacher Test','username':'keyboardteacher','password':'LongFreshPass47!','email':'keyboard@example.com','academy':''}
     def test_native_signup_does_not_need_browser_session_login(self):
         with patch('faculty_studio.views.session_login',side_effect=RuntimeError('No browser session')) as login:
             r=self.native(self.valid())
