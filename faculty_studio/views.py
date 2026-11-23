@@ -101,7 +101,7 @@ def api(request,action):
         if action in ('login','register'):return account(request,data,action=='register')
         try:request.user=user_for(request)
         except ValueError as exc:return fail(exc,401)
-        methods={'dashboard':'GET','patterns':'GET','pattern-save':'POST','pattern-delete':'POST','generate':'POST','draft':'GET','replace':'POST','preview':'POST','practice-start':'POST','practice-view':'GET','practice-submit':'POST','paper-files':'GET','recharge':'POST','catalog':'GET','usage-report':'GET','availability':'POST','preview-batch':'POST'}
+        methods={'dashboard':'GET','patterns':'GET','pattern-save':'POST','pattern-delete':'POST','generate':'POST','draft':'GET','replace':'POST','preview':'POST','practice-start':'POST','practice-view':'GET','practice-submit':'POST','paper-files':'GET','recharge':'POST','catalog':'GET','usage-report':'GET','availability':'POST','preview-batch':'POST','papers':'GET'}
         if action not in methods:return fail('Unknown action.',404)
         if methods[action]!=request.method:return fail('Method not allowed.',405)
         user=request.user
@@ -209,6 +209,22 @@ def api(request,action):
         if action=='practice-submit':
             obj=reward_attempt(user,data.get('id'),data.get('answers'))
             return JsonResponse({'score':obj.score,'total':len(obj.question_ids),'reward':obj.reward,'submitted':True})
+        if action=='papers':
+            import re
+            from django.core.paginator import Paginator
+            rows=Paper.objects.filter(owner=user).order_by('-created_at','-pk')
+            month=request.GET.get('month','');search=request.GET.get('search','').strip()
+            if month:
+                if not re.fullmatch(r'[0-9]{4}-(?:0[1-9]|1[0-2])',month):raise ValueError('Choose a valid month.')
+                year,number=map(int,month.split('-'))
+                if not 1900<=year<=9999:raise ValueError('Choose a valid year.')
+                rows=rows.filter(created_at__year=year,created_at__month=number)
+            if len(search)>120:raise ValueError('Search must be at most 120 characters.')
+            if search:rows=rows.filter(title__icontains=search)
+            page=int(request.GET.get('page','1'))
+            if not 1<=page<=100000:raise ValueError('Invalid paper page.')
+            paginator=Paginator(rows,20);selected=paginator.get_page(page)
+            return JsonResponse({'papers':list(selected.object_list.values('id','title','count','charged','created_at')),'count':paginator.count,'page':selected.number,'pages':paginator.num_pages})
         if action=='paper-files':
             obj=Paper.objects.filter(pk=request.GET.get('id'),owner=user).first()
             from .exporting import load_files
