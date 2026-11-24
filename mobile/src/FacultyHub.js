@@ -11,6 +11,7 @@ import {api,register} from './api';
 import * as ImagePicker from 'expo-image-picker';
 import {Button,Field,Choice,Fold,Segments,styles,colors} from './ui';
 import {SyllabusPicker} from './StudioParts';
+import {HomeTestCards} from './HomeTestCards';
 import {Question} from './Question';
 import {InlinePaper} from './InlinePaper';
 import {saveFiles,listFiles,shareFile,saveCopy} from './files';
@@ -75,10 +76,9 @@ export function FacultyHub({name,accountId,onBuilder,onLogout}){
  {!!message&&<View accessibilityRole="alert" style={{backgroundColor:'#e7f3ed',padding:12}}><Text style={{fontSize:12,lineHeight:18,color:colors.teal}}>{message}</Text></View>}
  {tab==='review'&&draft?<><InlinePaper key={draft.id} draft={draft} busy={busy} header={<><Button compact quiet title="‹ Edit setup" onPress={()=>{setEditing(true);setStep(2);go('pattern');}}/><Heading title={draft.name} subtitle={draft.question_ids.length+' questions · review before downloading'}/><View style={box}>{draft.spec.sections.map((s,i)=>{const r=ranges(draft.spec.sections)[i];return <Text key={i} style={{fontSize:12,color:colors.teal,paddingVertical:4}}>{s.label} · Q{r.start}–{r.end}</Text>;})}</View></>} footer={<Text style={[styles.muted,{textAlign:'center',paddingVertical:16}]}>End of paper · use Paper details below when you are ready.</Text>} onReplace={i=>run(async()=>{const number=locatePosition(draft.spec.sections,i).number;setDraft(await call('replace',{draft_id:draft.id,position:i}));notify('Q'+number+' replaced.');})} onReport={(q,meta)=>run(async()=>{setPreview(q||(await call('preview',{id:meta.id})).question);setReport(true);setReportNote('');})}/><View style={{padding:14,backgroundColor:'#fff',borderTopWidth:1,borderColor:colors.line}}><Button title="Paper details & download" primary disabled={busy} onPress={()=>setExportOpen(true)}/></View></>:<ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={{padding:18,paddingBottom:24}}>
  {tab==='home'&&<>
- <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:20}}><View><Text style={styles.muted}>Hello, {name.split(' ')[0]}</Text><Text style={{fontSize:25,fontWeight:'700',color:colors.ink,marginTop:4}}>Create a paper</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Open wallet" onPress={()=>go('wallet')} style={{padding:12,borderRadius:12,backgroundColor:'#e7f2ed'}}><Text style={{fontSize:14,color:colors.teal,fontWeight:'700'}}>{dash?.wallets[0]?.balance??'—'}</Text><Text style={{fontSize:10,color:colors.teal,marginTop:3}}>credits</Text></Pressable></View>
- <ActionRow title="Manual paper" subtitle="Choose syllabus and pick your questions" onPress={()=>onBuilder('browse')}/>
- <ActionRow title="Automatic paper" subtitle="Choose syllabus and review a random paper" onPress={()=>onBuilder('covered')}/>
- <ActionRow title="Saved patterns" subtitle="Use or create your question sequence" badge={patterns.length?String(patterns.length)+' saved':undefined} onPress={()=>{setEditing(false);go('pattern');}}/>
+ <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:20}}><View><Text style={styles.muted}>Hello, {name.split(' ')[0]}</Text><Text style={{fontSize:25,fontWeight:'700',color:colors.ink,marginTop:4}}>Your paper studio</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Open wallet" onPress={()=>go('wallet')} style={{padding:12,borderRadius:12,backgroundColor:'#e7f2ed'}}><Text style={{fontSize:14,color:colors.teal,fontWeight:'700'}}>{dash?.wallets[0]?.balance??'—'}</Text><Text style={{fontSize:10,color:colors.teal,marginTop:3}}>credits</Text></Pressable></View>
+ <Text style={{fontSize:13,color:colors.muted,marginBottom:14}}>Choose your test type</Text>
+ <HomeTestCards onChoose={onBuilder} patternCount={patterns.length} disabled={busy} onPatterns={()=>{setEditing(false);go('pattern');}}/>
  {draft&&<View style={{marginTop:16}}><ActionRow title="Continue your draft" subtitle={draft.name+' · '+draft.question_ids.length+' questions'} onPress={()=>go('review')}/></View>}
  </>}
  {tab==='papers'&&<PaperLibrary files={savedFiles} busy={busy} onDownload={paper=>run(()=>openAccountPaper(paper))} onShare={file=>run(()=>shareFile(file))} onSaveCopy={file=>run(()=>saveCopy(file))}/>}

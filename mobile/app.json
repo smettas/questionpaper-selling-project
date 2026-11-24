@@ -2,13 +2,13 @@
   "expo": {
     "name": "OJAS ONE Question Builder",
     "slug": "ojas-question-builder-native",
-    "version": "1.4.1",
+    "version": "1.4.3",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "android": {
       "package": "com.ojasone.questionbuilder.nativeapp",
-      "versionCode": 10,
+      "versionCode": 12,
       "permissions": [
         "INTERNET"
       ],
