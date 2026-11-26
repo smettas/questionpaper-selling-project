@@ -30,9 +30,9 @@ class NativeApiTests(TestCase):
         if data is None:return self.client.get('/api/mobile/v1/'+action+'/',**headers)
         return self.client.post('/api/mobile/v1/'+action+'/',json.dumps(data),content_type='application/json',**headers)
     def scope(self):return dict(subject='physics',chapters=[self.ch.pk],topics=[self.topic.pk],difficulty='',question_type='')
-    def test_requires_token_and_staff(self):
+    def test_requires_token_and_allows_registered_users(self):
         self.assertEqual(self.client.get('/api/mobile/v1/catalog/').status_code,401)
-        r=self.client.post('/api/mobile/v1/login/',json.dumps({'username':'notstaff','password':'test-password-long'}),content_type='application/json');self.assertEqual(r.status_code,401)
+        r=self.client.post('/api/mobile/v1/login/',json.dumps({'username':'notstaff','password':'test-password-long'}),content_type='application/json');self.assertEqual(r.status_code,200);self.assertIn('token',r.json())
         self.assertEqual(self.req('catalog').status_code,200)
     def test_password_change_revokes_token(self):
         self.user.set_password('changed-password');self.user.save();self.assertEqual(self.req('me').status_code,401)

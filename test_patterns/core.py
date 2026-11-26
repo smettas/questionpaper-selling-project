@@ -11,6 +11,9 @@ PCMB_SECTIONS = ("physics", "chemistry", "mathematics", "biology")
 LABELS = {"biology": "Biology", "physics": "Physics", "chemistry": "Chemistry", "botany": "Botany", "zoology": "Zoology", "mathematics": "Mathematics"}
 PROFILES = {"grand": "NEET Grand Test", "cumulative": "Cumulative Test", "custom180": "Custom 180-question Test", "custom40": "Custom 40-question Test"}
 # Suggestions are editable academy conventions, NOT an official NCERT/NTA partition.
+JEE_SECTIONS = ("physics", "chemistry", "mathematics")
+JEE_COUNTS = {"jee30": 10, "jee45": 15, "jee60": 20, "jee75": 25}
+PROFILES.update({"jee30": "JEE Quick Practice", "jee45": "JEE Standard Practice", "jee60": "JEE Intensive Practice", "jee75": "JEE Main MCQ Practice", "jeecumulative": "JEE Cumulative Practice", "jeecustom": "JEE Custom Practice"})
 ZOOLOGY = {_key(s) for s in (
     "Animal Kingdom", "Structural Organisation in Animals", "Structural Organization in Animals",
     "Biomolecules", "Breathing and Exchange of Gases", "Body Fluids and Circulation",
@@ -57,18 +60,46 @@ def validate_spec(data):
     if profile not in PROFILES:
         raise ValueError("Choose a test pattern.")
     subject = data.get("subject", "all")
-    pcmb = profile in ("custom40", "custom180") and subject == "pcmb"
-    full = profile in ("grand", "cumulative") or subject in ("all", "pcb", "pcmb")
-    if not full and subject not in (*SECTIONS, "mathematics"):
-        raise ValueError("Choose a subject for this custom test.")
-    total = 40 if profile == "custom40" else 180
-    targets = {section: total // 4 for section in (PCMB_SECTIONS if pcmb else SECTIONS)} if full else {subject: total}
+    jee = profile in (*JEE_COUNTS, "jeecumulative", "jeecustom")
+    exam = data.get("exam")
+    if exam not in (None, "jee", "neet"):
+        raise ValueError("Unknown examination.")
+    if exam == "jee" and not jee:
+        raise ValueError("Select a JEE practice pattern.")
+    if exam == "neet" and (jee or subject in ("pcmb", "pcm", "mathematics")):
+        raise ValueError("NEET uses Physics, Chemistry and Biology only.")
+    if jee:
+        if subject not in ("all", "pcm"):
+            raise ValueError("JEE presets use Physics, Chemistry and Mathematics only.")
+        if profile in JEE_COUNTS:
+            targets = dict.fromkeys(JEE_SECTIONS, JEE_COUNTS[profile])
+        else:
+            raw_targets = data.get("targets")
+            if not isinstance(raw_targets, dict) or set(raw_targets) != set(JEE_SECTIONS):
+                raise ValueError("Enter counts for Physics, Chemistry and Mathematics.")
+            if any(type(n) is not int or not 0 <= n <= 300 for n in raw_targets.values()):
+                raise ValueError("Use whole question counts from 0 to 300.")
+            targets = {k: raw_targets[k] for k in JEE_SECTIONS if raw_targets[k]}
+            if not 1 <= sum(targets.values()) <= 300:
+                raise ValueError("Choose 1–300 questions in total.")
+        total = sum(targets.values())
+    else:
+        pcmb = profile in ("custom40", "custom180") and subject == "pcmb"
+        full = profile in ("grand", "cumulative") or subject in ("all", "pcb", "pcmb")
+        if not full and subject not in (*SECTIONS, "mathematics"):
+            raise ValueError("Choose a subject for this custom test.")
+        total = 40 if profile == "custom40" else 180
+        targets = {section: total // 4 for section in (PCMB_SECTIONS if pcmb else SECTIONS)} if full else {subject: total}
     chapters, topics = available_catalog()
     published = {c["id"]: c for c in chapters if c["available"]}
     supplied = data.get("sections", {})
     if not isinstance(supplied, dict):
         raise ValueError("Invalid chapter selection.")
-    if not pcmb and full and supplied.get("mathematics"):
+    if exam == "neet" and set(supplied) - set(SECTIONS):
+        raise ValueError("NEET does not accept Mathematics or other sections.")
+    if jee and set(supplied) - set(JEE_SECTIONS):
+        raise ValueError("JEE does not accept Biology or other sections.")
+    if not jee and not pcmb and full and supplied.get("mathematics"):
         raise ValueError("Mathematics is not part of the PCB or NEET test. Choose PCMB custom test instead.")
     if profile == "grand":
         missing = missing_chapters(chapters)
@@ -91,7 +122,7 @@ def validate_spec(data):
             if pk not in published or published[pk]["subject"] != subject_for(section):
                 raise ValueError(f"An unavailable or wrong-subject chapter was selected for {LABELS[section]}.")
         all_topics = [t["id"] for t in topics if t["chapter_id"] in chapter_ids]
-        if profile in ("grand", "cumulative"):
+        if profile in ("grand", "cumulative", "jeecumulative"):
             topic_ids = all_topics
         else:
             topic_ids = ids(raw.get("topics", []), "topic", 2000)

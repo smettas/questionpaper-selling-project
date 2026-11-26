@@ -1,6 +1,6 @@
 from uuid import UUID
 from django.utils.html import escape
-from .core import LABELS, SECTIONS, PROFILES, subject_for
+from .core import LABELS, SECTIONS, PROFILES, JEE_COUNTS, JEE_SECTIONS, subject_for
 from .models import TestPlan
 
 
@@ -10,6 +10,10 @@ def prepare_pattern_export(request, details, ids, rows):
     except (ValueError, KeyError, TestPlan.DoesNotExist) as exc:
         raise ValueError("This test plan is unavailable. Generate the test again.") from exc
     spec = plan.specification
+    exam = request.POST.get('exam')
+    is_jee = spec['profile'] in (*JEE_COUNTS, 'jeecumulative', 'jeecustom')
+    if (exam == 'jee' and not is_jee) or (exam == 'neet' and is_jee):
+        raise ValueError('This test plan belongs to a different examination.')
     if len(ids) != spec['total']:
         raise ValueError(f"This pattern requires exactly {spec['total']} questions. Replace removed questions or generate a new test.")
     grouped = {section: [] for section in spec['targets']}
@@ -26,7 +30,8 @@ def prepare_pattern_export(request, details, ids, rows):
             raise ValueError(f"{LABELS[section]} requires {target} questions; {len(grouped[section])} are selected.")
     if spec['profile'] in ('grand', 'cumulative') and details.get('start_number') != 1:
         raise ValueError("Grand and Cumulative tests start at question 1.")
-    sections = [(LABELS[section], grouped[section]) for section in spec["targets"]]
+    ordered = [section for section in JEE_SECTIONS if section in grouped] if is_jee else list(spec["targets"])
+    sections = [(LABELS[section], grouped[section]) for section in ordered]
     details = {**details, 'marks': spec['marks'], 'title': details.get('title') or PROFILES[spec['profile']]}
     coverage = []
     from question_bank.chapter_order import order_chapters
@@ -36,7 +41,7 @@ def prepare_pattern_export(request, details, ids, rows):
         names = [f"{c['name']} (Class {c['level']})" for c in order_chapters(list(chapters.values()))]
         coverage.append(f"{label}: " + '; '.join(names))
     details['covered_chapters'] = coverage
-    details['test_summary'] = f"{spec['total']} questions | " + ' | '.join(f"{LABELS[k]} {n}" for k,n in spec['targets'].items())
+    details['test_summary'] = f"{spec['total']} questions | " + ' | '.join(f"{LABELS[k]} {spec['targets'][k]}" for k in ordered)
     return details, sections
 
 
@@ -70,6 +75,13 @@ def word_coverage(doc, details):
 
 
 def prepare_export(request, details, ids, rows, existing_sections):
+    exam = request.POST.get('exam')
+    allowed = {'jee': {'physics', 'chemistry', 'mathematics'}, 'neet': {'physics', 'chemistry', 'biology'}}
+    if exam:
+        if exam not in allowed:
+            raise ValueError('Unknown examination.')
+        if any(row.subtopic.chapter.subject not in allowed[exam] for row in rows.values()):
+            raise ValueError('Selected questions contain a subject outside this examination.')
     if request.POST.get('test_pattern_id'):
         return prepare_pattern_export(request, details, ids, rows)
     # Ordinary/manual papers receive the same actual-chapter summary too.
