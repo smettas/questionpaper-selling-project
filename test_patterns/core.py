@@ -7,7 +7,8 @@ from question_bank.chapter_order import CHAPTERS, RANKS, _key, order_chapters
 from syllabus_builder.views import ids, bucket, draw
 
 SECTIONS = ("physics", "chemistry", "botany", "zoology")
-LABELS = {"physics": "Physics", "chemistry": "Chemistry", "botany": "Botany", "zoology": "Zoology"}
+PCMB_SECTIONS = ("physics", "chemistry", "mathematics", "biology")
+LABELS = {"biology": "Biology", "physics": "Physics", "chemistry": "Chemistry", "botany": "Botany", "zoology": "Zoology", "mathematics": "Mathematics"}
 PROFILES = {"grand": "NEET Grand Test", "cumulative": "Cumulative Test", "custom180": "Custom 180-question Test", "custom40": "Custom 40-question Test"}
 # Suggestions are editable academy conventions, NOT an official NCERT/NTA partition.
 ZOOLOGY = {_key(s) for s in (
@@ -20,7 +21,7 @@ rng = SystemRandom()
 
 
 def subject_for(section):
-    return section if section in ("physics", "chemistry") else "biology"
+    return section if section in ("physics", "chemistry", "mathematics") else "biology"
 
 
 def suggestion(chapter):
@@ -41,6 +42,8 @@ def available_catalog():
 def missing_chapters(chapters):
     missing = defaultdict(list)
     for (subject, level), names in CHAPTERS.items():
+        if subject == "mathematics":
+            continue  # NEET readiness must not depend on Mathematics.
         present = {RANKS.get((subject, level), {}).get(_key(c["name"]))
                    for c in chapters if c["subject"] == subject and c["level"] == level and c["available"]}
         for rank, name in enumerate(names, 1):
@@ -53,17 +56,20 @@ def validate_spec(data):
     profile = data.get("profile")
     if profile not in PROFILES:
         raise ValueError("Choose a test pattern.")
-    full = profile in ("grand", "cumulative") or data.get("subject", "all") == "all"
     subject = data.get("subject", "all")
-    if not full and subject not in SECTIONS:
+    pcmb = profile in ("custom40", "custom180") and subject == "pcmb"
+    full = profile in ("grand", "cumulative") or subject in ("all", "pcb", "pcmb")
+    if not full and subject not in (*SECTIONS, "mathematics"):
         raise ValueError("Choose a subject for this custom test.")
     total = 40 if profile == "custom40" else 180
-    targets = {section: total // 4 for section in SECTIONS} if full else {subject: total}
+    targets = {section: total // 4 for section in (PCMB_SECTIONS if pcmb else SECTIONS)} if full else {subject: total}
     chapters, topics = available_catalog()
     published = {c["id"]: c for c in chapters if c["available"]}
     supplied = data.get("sections", {})
     if not isinstance(supplied, dict):
         raise ValueError("Invalid chapter selection.")
+    if not pcmb and full and supplied.get("mathematics"):
+        raise ValueError("Mathematics is not part of the PCB or NEET test. Choose PCMB custom test instead.")
     if profile == "grand":
         missing = missing_chapters(chapters)
         if missing:

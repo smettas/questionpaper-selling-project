@@ -1,6 +1,6 @@
 const TYPE_OPTIONS=[['any','Any format'],['mcq','Standard MCQ'],['assertion-reason','Assertion–reason'],['statement','Statement'],['matching','Matching'],['diagram','Diagram'],['graph','Graph']];
 const TYPE_LABELS=Object.fromEntries(TYPE_OPTIONS);
-const SECTION_OPTIONS=[['physics','Physics','physics'],['chemistry','Chemistry','chemistry'],['biology','Biology','biology'],['botany','Botany','biology'],['zoology','Zoology','biology']];
+const SECTION_OPTIONS=[['physics','Physics','physics'],['chemistry','Chemistry','chemistry'],['biology','Biology','biology'],['botany','Botany','biology'],['zoology','Zoology','biology'],['mathematics','Mathematics','mathematics']];
 function freshSection(key='physics',count=10){const s=SECTION_OPTIONS.find(x=>x[0]===key)||SECTION_OPTIONS[0];return{label:s[1],subject:s[2],chapters:[],topics:[],difficulty:'',format_mode:'manual',numbering:'auto',slots:Array(count).fill('mcq')};}
 function sectionKey(s){return SECTION_OPTIONS.find(x=>x[1].toLowerCase()===String(s.label).toLowerCase())?.[0]||s.subject;}
 function ranges(sections,start=1){let p=start;return sections.map(s=>{const explicit=s.numbering!=='auto'&&Number.isInteger(Number(s.start_number))&&Number(s.start_number)>0;if(explicit)p=Number(s.start_number);const item={start:p,end:p+s.slots.length-1,count:s.slots.length};p=item.end+1;return item;});}

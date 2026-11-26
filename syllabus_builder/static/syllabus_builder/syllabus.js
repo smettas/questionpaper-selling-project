@@ -6,7 +6,7 @@
   const $ = id => document.getElementById(id);
   const types = [['mcq','Standard MCQs'],['assertion-reason','Assertion–reason'],['statement','Statement-based'],['matching','Match the following'],['diagram','Diagrams'],['graph','Graphs']];
   const labels = Object.fromEntries(types);
-  const names = {physics:'Physics',chemistry:'Chemistry',biology:'Biology'};
+  const names = {physics:'Physics',chemistry:'Chemistry',biology:'Biology',mathematics:'Mathematics'};
   const chosen = new Set(), topics = new Set(), candidates = [], seen = new Set(), cache = new Map();
   const quotas = {}, countCells = {}, quotaCells = [], targets = {};
   const paperFields = ['institution','title','watermark','date','marks','duration','start_number','end_number','export_subject','page_columns','option_layout','arrangement','output_format'];
@@ -226,7 +226,7 @@
     }
     renderChapters();renderTopics();quotaSummary();setMode(!!d.active);changed();if(batchScope)$('sy-stale').hidden=JSON.stringify(scope())===JSON.stringify(batchScope);
   }
-  function shuffleSelected(){const order=['Physics','Chemistry','Biology'],all=[...selected.values()],out=[];for(const name of order){const rows=all.filter(q=>q.subject===name);for(let i=rows.length-1;i>0;i--){const values=new Uint32Array(1);crypto.getRandomValues(values);const j=values[0]%(i+1);[rows[i],rows[j]]=[rows[j],rows[i]];}out.push(...rows);}selected.clear();for(const q of out)selected.set(q.id,q);clearDownloads();refreshSelection();}
+  function shuffleSelected(){const order=['Physics','Chemistry','Biology','Mathematics'],all=[...selected.values()],out=[];for(const name of order){const rows=all.filter(q=>q.subject===name);for(let i=rows.length-1;i>0;i--){const values=new Uint32Array(1);crypto.getRandomValues(values);const j=values[0]%(i+1);[rows[i],rows[j]]=[rows[j],rows[i]];}out.push(...rows);}selected.clear();for(const q of out)selected.set(q.id,q);clearDownloads();refreshSelection();}
 
   for(const[key,label]of types){const row=el('tr'),cell=el('td','0'),quota=el('td'),input=el('input');input.type='number';input.min='0';input.max='300';input.value='0';input.setAttribute('aria-label',`${label} candidates requested`);input.addEventListener('input',()=>{quotaSummary();queueSave();});quotas[key]=input;countCells[key]=cell;quota.hidden=true;quota.append(input);quotaCells.push(quota);row.append(el('th',label),cell,quota);row.firstChild.scope='row';$('sy-count-rows').append(row);}
   quotaCells.push(...root.querySelectorAll('.sy-quota-cell'));

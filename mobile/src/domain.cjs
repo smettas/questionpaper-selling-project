@@ -1,4 +1,4 @@
-const SUBJECTS=['physics','chemistry','biology'];
+const SUBJECTS=['physics','chemistry','biology','mathematics'];
 const SECTIONS=['physics','chemistry','botany','zoology'];
 const TYPES=[['mcq','Standard MCQs'],['assertion-reason','Assertion–reason'],['statement','Statements'],['matching','Matching'],['diagram','Diagrams'],['graph','Graphs']];
 function toggleId(ids,id){return ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];}

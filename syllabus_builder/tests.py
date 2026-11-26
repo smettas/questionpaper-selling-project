@@ -34,6 +34,13 @@ class SyllabusWorkflowTests(TestCase):
         cls.scope = {"subject": "physics", "chapters": [cls.a.id, cls.b.id],
                      "topics": [cls.t1.id, cls.t2.id, cls.t3.id], "difficulty": "", "question_type": ""}
 
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("syllabus-test-user")
+        self.client.force_login(self.user)
+
+    def test_anonymous_requests_are_rejected(self):
+        self.assertEqual(Client().get(reverse("syllabus_builder:counts")).status_code, 401)
+
     def post(self, endpoint, **data):
         return self.client.post(reverse(f"syllabus_builder:{endpoint}"), json.dumps(data), content_type="application/json")
 
@@ -167,6 +174,7 @@ class SyllabusWorkflowTests(TestCase):
 
     def test_write_endpoints_require_csrf(self):
         strict = Client(enforce_csrf_checks=True)
+        strict.force_login(self.user)
         for endpoint, body in (("sample", {**self.scope, "count": 1}), ("report", {"question_id": self.rows[0].id, "category": "answer", "note": "Please verify the answer."})):
             self.assertEqual(strict.post(reverse(f"syllabus_builder:{endpoint}"), json.dumps(body), content_type="application/json").status_code, 403)
 

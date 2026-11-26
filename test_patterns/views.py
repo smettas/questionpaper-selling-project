@@ -27,9 +27,8 @@ def generate(request):
         data = json_body(request)
         spec = validate_spec(data)
         rows = []
-        for section in SECTIONS:
-            if section in spec["targets"]:
-                rows.extend(metadata(choose_section(spec, section), section))
+        for section in spec["targets"]:
+            rows.extend(metadata(choose_section(spec, section), section))
         plan = TestPlan.objects.create(profile=spec["profile"], specification=spec)
         return JsonResponse({"plan_id": str(plan.pk), "questions": rows, "total": spec["total"],
                              "marks": spec["marks"], "targets": spec["targets"]})

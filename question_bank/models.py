@@ -6,8 +6,9 @@ class Chapter(models.Model):
         PHYSICS = "physics", "Physics"
         CHEMISTRY = "chemistry", "Chemistry"
         BIOLOGY = "biology", "Biology"
+        MATHEMATICS = "mathematics", "Mathematics"
 
-    subject = models.CharField(max_length=10, choices=Subject.choices)
+    subject = models.CharField(max_length=16, choices=Subject.choices)
     level = models.PositiveSmallIntegerField(choices=[(11, "Class 11"), (12, "Class 12")])
     name = models.CharField(max_length=150)
 

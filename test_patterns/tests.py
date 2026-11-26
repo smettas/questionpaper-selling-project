@@ -2,11 +2,12 @@ import json
 from base64 import b64decode
 from io import BytesIO
 from unittest.mock import patch
-from django.test import TestCase, Client, RequestFactory
+from django.test import TestCase, Client, RequestFactory, override_settings
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from question_bank.models import Chapter, Subtopic, Question
 from question_bank.chapter_order import CHAPTERS
-from .core import validate_spec, choose_section, available_catalog, missing_chapters, suggestion, LABELS
+from .core import validate_spec, choose_section, available_catalog, missing_chapters, suggestion, LABELS, SECTIONS
 from .models import TestPlan
 from .exporting import prepare_export
 
@@ -30,6 +31,58 @@ class PatternTests(TestCase):
         cls.config={'profile':'cumulative','confirm_biology':True,'sections':{
             section:{'chapters':[ch.pk],'topics':[]} for section,ch in cls.groups.items()}}
 
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("pattern-test-user")
+        self.client.force_login(self.user)
+
+    def test_anonymous_generation_rejected(self):
+        self.assertEqual(Client().post(reverse("test_patterns:generate"), json.dumps(self.config), content_type="application/json").status_code, 401)
+
+    def test_mathematics_custom_generation_and_export(self):
+        chapter = Chapter.objects.create(subject="mathematics", level=11, name="Trigonometric Functions")
+        topic = Subtopic.objects.create(chapter=chapter, name="Identities")
+        Question.objects.bulk_create([Question(subtopic=topic, difficulty="moderate", correct_option=1, fingerprint=f"math-regression-{i}", structured={"stem": f"Math fixture {i}", "options": ["1", "2", "3", "4"], "hint": "Reason", "diagrams": []}) for i in range(40)])
+        config = {"profile": "custom40", "subject": "mathematics", "sections": {"mathematics": {"chapters": [chapter.pk], "topics": [topic.pk]}}}
+        response = self.post("generate", config)
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertEqual(len(data["questions"]), 40)
+        self.assertEqual({q["section"] for q in data["questions"]}, {"mathematics"})
+        ids = [q["id"] for q in data["questions"]]
+        request = RequestFactory().post("/download/", {"test_pattern_id": data["plan_id"]})
+        details, sections = prepare_export(request, {"start_number": 1}, ids, Question.objects.select_related("subtopic__chapter").in_bulk(ids), [])
+        self.assertEqual([(label, len(rows)) for label, rows in sections], [("Mathematics", 40)])
+        self.assertNotIn("mathematics", missing_chapters(available_catalog()[0]))
+
+    def test_pcmb_custom_groups_and_pcb_isolation(self):
+        chapter = Chapter.objects.create(subject="mathematics", level=11, name="Trigonometric Functions")
+        topic = Subtopic.objects.create(chapter=chapter, name="Identities")
+        Question.objects.bulk_create([Question(subtopic=topic, difficulty="moderate", correct_option=1, fingerprint=f"pcmb-fixture-{i}", structured={"stem": f"PCMB fixture {i}", "options": ["1", "2", "3", "4"], "hint": "Reason", "diagrams": []}) for i in range(50)])
+        scopes = {key: {"chapters": [self.groups[key].pk], "topics": list(Subtopic.objects.filter(chapter=self.groups[key]).values_list("pk", flat=True))} for key in ("physics", "chemistry")}
+        scopes["mathematics"] = {"chapters": [chapter.pk], "topics": [topic.pk]}
+        bio_ids = [self.groups[key].pk for key in ("botany", "zoology")]
+        scopes["biology"] = {"chapters": bio_ids, "topics": list(Subtopic.objects.filter(chapter_id__in=bio_ids).values_list("pk", flat=True))}
+        for profile, count in (("custom40", 10), ("custom180", 45)):
+            response = self.post("generate", {"profile": profile, "subject": "pcmb", "sections": scopes})
+            self.assertEqual(response.status_code, 200, response.content)
+            data = response.json()
+            self.assertEqual(data["targets"], {key: count for key in scopes})
+            self.assertEqual(len({q["id"] for q in data["questions"]}), count * 4)
+            ids = [q["id"] for q in data["questions"]]
+            request = RequestFactory().post("/download/", {"test_pattern_id": data["plan_id"]})
+            details, groups = prepare_export(request, {"start_number": 1}, ids, Question.objects.select_related("subtopic__chapter").in_bulk(ids), [])
+            self.assertEqual([(label, len(rows)) for label, rows in groups], [("Physics", count), ("Chemistry", count), ("Mathematics", count), ("Biology", count)])
+            self.assertEqual(details["marks"], count * 16)
+            old = next(q for q in data["questions"] if q["section"] == "mathematics")
+            replacement = self.post("replace", {"plan_id": data["plan_id"], "section": "mathematics", "exclude": ids})
+            self.assertEqual(replacement.status_code, 200, replacement.content)
+            self.assertEqual(replacement.json()["question"]["section"], old["section"])
+        pcb = self.post("generate", self.config)
+        self.assertEqual(pcb.status_code, 200, pcb.content)
+        self.assertEqual(set(pcb.json()["targets"]), set(SECTIONS))
+        self.assertEqual(self.post("generate", {**self.config, "sections": {**self.config["sections"], "mathematics": scopes["mathematics"]}}).status_code, 400)
+        self.assertNotIn("mathematics", missing_chapters(available_catalog()[0]))
+
     def post(self,name,data):
         return self.client.post(reverse('test_patterns:'+name),json.dumps(data),content_type='application/json')
 
@@ -38,7 +91,7 @@ class PatternTests(TestCase):
         self.assertEqual(response.status_code,200,response.content)
         d=response.json();self.assertEqual(d['total'],180);self.assertEqual(d['marks'],720)
         self.assertEqual(len({q['id'] for q in d['questions']}),180)
-        for section in LABELS:self.assertEqual(sum(q['section']==section for q in d['questions']),45)
+        for section in SECTIONS:self.assertEqual(sum(q['section']==section for q in d['questions']),45)
         self.assertEqual([q['section'] for q in d['questions'][:45]],['physics']*45)
         self.assertEqual(TestPlan.objects.count(),1)
 
@@ -62,7 +115,7 @@ class PatternTests(TestCase):
             k:{'chapters':[ch.pk],'topics':list(ch.subtopic_set.values_list('pk',flat=True))} for k,ch in self.groups.items()}}
         d=self.post('generate',config).json()
         self.assertEqual(d['total'],40)
-        for section in LABELS:self.assertEqual(sum(q['section']==section for q in d['questions']),10)
+        for section in SECTIONS:self.assertEqual(sum(q['section']==section for q in d['questions']),10)
 
     def test_biology_confirmation_and_no_overlap(self):
         self.assertEqual(self.post('generate',{**self.config,'confirm_biology':False}).status_code,400)
@@ -89,6 +142,8 @@ class PatternTests(TestCase):
         # Build a complete disposable catalog; full-syllabus mode then succeeds.
         groups={'physics':[],'chemistry':[],'botany':[],'zoology':[]}
         for (subject,level),names in CHAPTERS.items():
+            if subject == "mathematics":
+                continue
             for name in names:
                 ch,_=Chapter.objects.get_or_create(subject=subject,level=level,name=name)
                 section=suggestion({'subject':subject,'name':name});groups[section].append(ch.pk)
@@ -113,7 +168,7 @@ class PatternTests(TestCase):
         rows=Question.objects.select_related('subtopic__chapter').in_bulk(ids)
         request=RequestFactory().post('/download/',{'test_pattern_id':d['plan_id']})
         details,sections=prepare_export(request,{'marks':5,'start_number':1,'title':''},ids,rows,[])
-        self.assertEqual(details['marks'],720);self.assertEqual([label for label,_ in sections],list(LABELS.values()))
+        self.assertEqual(details['marks'],720);self.assertEqual([label for label,_ in sections],[LABELS[k] for k in SECTIONS])
         self.assertEqual(len(details['covered_chapters']),4)
         with self.assertRaises(ValueError):prepare_export(request,{'start_number':1},ids[:-1],rows,[])
         # Swap a Physics place for a different Chemistry item: 44/46 must fail.
@@ -121,13 +176,20 @@ class PatternTests(TestCase):
         invalid=[extra.pk,*ids[1:]];bad_rows=Question.objects.select_related('subtopic__chapter').in_bulk(invalid)
         with self.assertRaises(ValueError):prepare_export(request,{'start_number':1},invalid,bad_rows,[])
 
+    @override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.InMemoryStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
     def test_real_download_uses_four_sections_and_forced_marks(self):
+        from faculty_studio.models import Policy
+        policy = Policy.current()
+        policy.staff_free = True
+        policy.save(update_fields=["staff_free"])
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
         d=self.post('generate',self.config).json()
         with patch('paper_builder.views.build_pdf',return_value=b'%PDF-test') as build:
             r=self.client.post(reverse('download'),{'test_pattern_id':d['plan_id'],'question_ids':json.dumps([q['id'] for q in d['questions']]),'marks':'5','start_number':'1','output_format':'pdf','arrangement':'combined'})
         self.assertEqual(r.status_code,200,r.content)
         details,sections=build.call_args.args[:2]
-        self.assertEqual(details['marks'],720);self.assertEqual([label for label,_ in sections],list(LABELS.values()))
+        self.assertEqual(details['marks'],720);self.assertEqual([label for label,_ in sections],[LABELS[k] for k in SECTIONS])
 
     def test_header_summary_pdf_word_and_legacy_export(self):
         from paper_builder.pdf import build_pdf
@@ -147,5 +209,6 @@ class PatternTests(TestCase):
 
     def test_write_endpoints_require_csrf(self):
         strict=Client(enforce_csrf_checks=True)
+        strict.force_login(self.user)
         self.assertEqual(strict.post(reverse('test_patterns:generate'),json.dumps(self.config),content_type='application/json').status_code,403)
         self.assertEqual(self.client.get(reverse('test_patterns:generate')).status_code,405)

@@ -21,7 +21,7 @@ def validate(spec,require_scope=True):
     clean=[];total=0;previous_end=0
     for s in sections:
         if not isinstance(s,dict):raise ValueError('Invalid section.')
-        subject=s.get('subject');label=str(s.get('label') or '').strip()[:80] or {'physics':'Physics','chemistry':'Chemistry','biology':'Biology'}.get(subject,'');slots=s.get('slots')
+        subject=s.get('subject');label=str(s.get('label') or '').strip()[:80] or {'physics':'Physics','chemistry':'Chemistry','biology':'Biology','mathematics':'Mathematics'}.get(subject,'');slots=s.get('slots')
         if subject not in Chapter.Subject.values or not label:raise ValueError('Choose a subject and section name.')
         if not isinstance(slots,list) or not 1<=len(slots)<=300 or any(k not in TYPES for k in slots):raise ValueError('Assign a valid type to every position.')
         chapters=s.get('chapters',[]);topics=s.get('topics',[])

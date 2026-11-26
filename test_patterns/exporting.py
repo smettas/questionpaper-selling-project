@@ -26,7 +26,7 @@ def prepare_pattern_export(request, details, ids, rows):
             raise ValueError(f"{LABELS[section]} requires {target} questions; {len(grouped[section])} are selected.")
     if spec['profile'] in ('grand', 'cumulative') and details.get('start_number') != 1:
         raise ValueError("Grand and Cumulative tests start at question 1.")
-    sections = [(LABELS[section], grouped[section]) for section in SECTIONS if section in grouped]
+    sections = [(LABELS[section], grouped[section]) for section in spec["targets"]]
     details = {**details, 'marks': spec['marks'], 'title': details.get('title') or PROFILES[spec['profile']]}
     coverage = []
     from question_bank.chapter_order import order_chapters

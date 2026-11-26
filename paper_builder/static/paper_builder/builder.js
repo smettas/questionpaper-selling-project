@@ -10,7 +10,7 @@ const available = document.querySelector('#available');
 const results = document.querySelector('#question-results');
 const selectedList = document.querySelector('#selected');
 const selected = new Map();
-const subjectOrder = ['Physics', 'Chemistry', 'Biology'];
+const subjectOrder = ['Physics', 'Chemistry', 'Biology', 'Mathematics'];
 const exportSubject = form.elements.export_subject;
 let shuffle = '';
 
@@ -351,7 +351,7 @@ form.addEventListener('submit', async event => {
   const tooltip = document.createElement('div'); tooltip.className='ojas-selected-preview-hover'; tooltip.id='ojas-selected-preview-hover'; tooltip.setAttribute('role','tooltip'); tooltip.hidden=true; document.body.append(tooltip);
 
   function selectedIds() {
-    const order = typeof subjectOrder !== 'undefined' ? subjectOrder : ['Physics','Chemistry','Biology'];
+    const order = typeof subjectOrder !== 'undefined' ? subjectOrder : ['Physics','Chemistry','Biology','Mathematics'];
     const rows = Array.from(selected.values());
     return [...order.flatMap(name=>rows.filter(q=>q.subject===name)),...rows.filter(q=>!order.includes(q.subject))].map(q=>Number(q.id));
   }

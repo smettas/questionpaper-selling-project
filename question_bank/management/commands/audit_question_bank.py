@@ -16,7 +16,7 @@ class Command(BaseCommand):
     help = 'Read-only bank diagnostics; NOT a complete scientific answer verification.'
     def add_arguments(self,p):
         p.add_argument('--out',default='audit_reports')
-        p.add_argument('--subject', choices=['physics','chemistry','biology'])
+        p.add_argument('--subject', choices=['physics','chemistry','biology','mathematics'])
         p.add_argument('--chapter-id',type=int)
         p.add_argument('--after-id',type=int,default=0)
         p.add_argument('--limit',type=int)

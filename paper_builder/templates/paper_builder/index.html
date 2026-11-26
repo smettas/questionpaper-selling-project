@@ -27,7 +27,7 @@
 {% include "syllabus_builder/panel.html" %}
 
 <div class="grid" id="filters" data-url="{% url 'browse-questions' %}">
-<label>Subject<select id="subject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="biology">Biology</option></select></label>
+<label>Subject<select id="subject"><option value="physics">Physics</option><option value="chemistry">Chemistry</option><option value="biology">Biology</option><option value="mathematics">Mathematics</option></select></label>
 <label>Chapter<select id="chapter"></select></label>
 <label>Subtopic<select id="topic"></select></label>
 <label>Difficulty<select id="difficulty"><option value="">All difficulties</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
@@ -63,7 +63,7 @@
 <div id="selected" data-preview-url="{% url 'selected-question-preview' pk=0 %}"></div>
 <fieldset class="export-settings">
 <legend>Export settings</legend>
-<label>Subjects to export<select name="export_subject"><option value="">All selected subjects</option><option>Physics</option><option>Chemistry</option><option>Biology</option></select></label>
+<label>Subjects to export<select name="export_subject"><option value="">All selected subjects</option><option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option></select></label>
 <div class="grid">
 <label>Paper columns<select name="page_columns"><option value="one">One column</option><option value="two">Two columns</option></select></label>
 <label>Option layout<select name="option_layout"><option value="one">One per row</option><option value="two">Two per row if they fit</option><option value="four">Four per row if they fit</option></select></label>
